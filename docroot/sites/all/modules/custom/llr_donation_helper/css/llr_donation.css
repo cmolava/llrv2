@@ -1,0 +1,59 @@
+.hidden {
+  display: none;
+}
+
+/**
+ * Sample  css
+ */
+body.donate-amount-5 #main-wrapper {
+  background-color: #eff;
+}
+
+body.donate-amount-10 #main-wrapper {
+ background-color: #fef;
+}
+
+body.donate-amount-20 #main-wrapper {
+  background-color: #ffe;
+}
+
+div.select-block {
+ width: 27%;
+ height: 50px;
+ border: #ccc 1px solid;
+ display : block;
+ float : left;
+ margin : 5px;
+ overflow : hidden;
+ padding: 0;
+}
+div.select-block:hover {
+  background-color: #efefef;
+}
+div.select-block-selected {
+  background-color: #ccc;
+}
+div.select-block-container {
+  clear : both;
+  overflow : hidden;
+}
+
+div.select-block label {
+  display: block;
+  text-align : center;
+  font-size : 2em;
+  width : 100%;
+  margin: 0;
+}
+
+form.webform-donate-single table#wf-crm-billing-items,
+form.webform-donate-monthly table#wf-crm-billing-items {
+  /** making this display:none prevents the payment form from displaying
+   * so use visibility : hidden instead.
+   */
+  visibility :hidden; 
+}
+form.webform-donate-single #payment_information fieldset.billing_name_address-group,
+form.webform-donate-monthly #payment_information fieldset.billing_name_address-group {
+/*  display : none; */
+}

@@ -1,0 +1,212 @@
+<?php
+/**
+ * @file llr_webform.module 
+ *
+ **/
+
+
+/**
+ * 1.  General multi-form functionality
+ 
+ * 
+ * The intended use is when redirecting between forms, or between a form
+ * submission and a completion page which uses the values.
+ *
+ * In such a case we cannot use the form cache since there is no post data to
+ * retrieve a form key.
+ *
+ * CTools wizard is an option, but this cannot be used with webform.
+ *
+ * 2. node machine name. todo: store in db tables. remove uuid dependency,
+ */
+
+define('LLR_CACHE_PREFIX', 'llr_webform_data');
+ /* 
+  * Stores form values for retrieval on a subsequent request.
+  *
+  * @param $name This should be the machine name of the webform to recieve the
+  * and use values.
+  *
+  * @param $values
+  */
+function llr_webform_store_values($name, $values) {
+  ctools_include('object-cache'); 
+  ctools_object_cache_set(LLR_CACHE_PREFIX, $name, $values);
+}
+
+function llr_webform_retrieve_values($name) {
+  ctools_include('object-cache'); 
+  $cache = ctools_object_cache_get(LLR_CACHE_PREFIX, $name);
+  return $cache ? $cache : array();
+}
+
+function llr_webform_clear_values($name) {
+  ctools_include('object-cache'); 
+  return ctools_object_cache_clear(LLR_CACHE_PREFIX, $name);
+}
+
+
+
+/**
+ * Functionality relating to name- webform uuid mapping.
+ */
+
+
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ */
+function llr_webform_form_webform_configure_form_alter(&$form, &$form_state) {
+  if ( ! empty($form['#node']->uuid) )  { 
+    $machine_name_default = ! empty($form_state['values']['machine_name']) ? $form_state['values']['machine_name'] : llr_webform_get_name_by_uuid($form['#node']->uuid);
+    $form['llr_dev'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Custom'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#weight' => 10,
+    );
+    $form['llr_dev']['machine_name'] = array(
+      '#type' => 'textfield',
+      '#title' => 'Machine name',
+      '#default_value' => $machine_name_default,
+      '#element_validate' => array('llr_webform_element_validate_machine_name'),
+      '#description' => t('Add a name to identify this webform in code. Alphanumeric characters and underscores only. (leave otherwise).'),
+    );
+    $form['#submit'][] = 'llr_webform_webform_configure_form_submit';
+  }
+}
+
+
+/**
+ * Submit callback for webform configure form
+ *
+ * Saves custom webform machine name with uuid of webform.
+ */
+function llr_webform_webform_configure_form_submit($form, &$form_state) {
+  //For now we save as system variables.
+  //todo: save to db and make exportable.
+  $values = $form_state['values'];
+  if ( !empty($values['machine_name']) && !empty($form['#node']->uuid) ) {
+    llr_webform_assign_name_to_uuid($values['machine_name'], $form['#node']->uuid);
+    
+  }
+
+}
+function llr_webform_element_validate_machine_name($element, &$form_state) {
+  $value = $element['#value'];
+  if ( $value && ! preg_match('/^[a-z]{1}[a-z0-9_]{2,}$/', $value) ) {
+    form_error($element, t('%name must include only lowercase letters, numbers or underscores and begin with a letter. %value', array('%name' => $element['#title'], '%value' => $value)) );
+  }
+  else {
+    // check for uniqueness
+    $nid = llr_webform_get_id_by_name($value);
+    if ( $nid && $nid != $form_state['complete form']['#node']->nid ) {
+      form_error($element, t('%name already exists. !link', array(
+        '%name' => $value,
+        '!link' => l('Go to other form.', "node/$nid/webform/configure")
+        )
+      )); 
+    }
+  }
+
+}
+
+/**
+ * Associate uuid with a name which is easier to program with etc.
+ * todo: create database table to hold this data rather than use system
+ * variables
+ * todo: handle uuid/entity deletion, change
+ * todo: export callbacks
+ */
+function llr_webform_assign_name_to_uuid($name, $uuid) {
+  $data = variable_get('llr_machine_names', array());
+  $by_uuid =  array_flip($data);
+  if ( ! empty($by_uuid[$uuid]) ) {
+     unset($data[$by_uuid[$uuid]]);
+  } 
+  $data[$name] = $uuid;
+  variable_set('llr_machine_names', $data);
+  drupal_static_reset('llr_webform_get_id_by_name');
+}
+
+function llr_webform_get_name_by_uuid($uuid) {
+  if ( ! $uuid || ! is_string($uuid) ) {
+    return;
+  }
+  $data = variable_get('llr_machine_names', array());
+  $data = array_flip($data);
+  return ! empty($data[$uuid]) ? $data[$uuid] : NULL;
+}
+
+function llr_webform_get_name_by_id($id) {
+  if ( ! $id || ! is_numeric($id) ) {
+    return;
+  }
+  $cache = &drupal_static(__FUNCTION__);
+  if ( ! isset($cache[$id]) ) {
+    $load_func = 'entity_get_uuid_by_id';
+    if ( ! function_exists($load_func) ) {
+      module_load_include('inc', 'uuid', 'uuid.entity');
+    }
+    $uuids = $load_func('node', array($id));
+      if ( ! empty($uuids[$id]) ) {
+        $cache[$id] = llr_webform_get_name_by_uuid($uuids[$id]);
+      }
+  }
+  return ! empty($cache[$id]) ? $cache[$id] : NULL;
+}
+
+function llr_webform_get_uuid_by_name($name) {
+  if ( ! $name || ! is_string($name) ) {
+    return;
+  }
+  $data = variable_get('llr_machine_names', array());
+  return ! empty($data[$name]) ? $data[$name] : NULL;
+}
+
+/**
+ * Helper function to get the local id from a custom machine name
+ * @param $name : The custom machine name
+ * @param $type : The entity type
+ */
+function llr_webform_get_id_by_name($name, $type='node') {
+  $cache = &drupal_static(__FUNCTION__);
+  if ( empty($cache[$name]) ) {
+    $uuid = llr_webform_get_uuid_by_name($name);
+    if ( $uuid ) {
+      $load_func = 'entity_get_id_by_uuid';
+      if ( ! function_exists($load_func) ) {
+        module_load_include('inc', 'uuid', 'uuid.entity');
+      }
+      $ids = $load_func($type, array($uuid));
+      if ( ! empty($ids[$uuid]) ) {
+        $cache[$name] = $ids[$uuid];
+      }
+    }
+  }
+  return ! empty($cache[$name]) ? $cache[$name] : NULL;
+}
+
+
+
+/**
+ * Implements hook_node_load
+ */
+function llr_webform_node_load($nodes, $types ) {
+  if ( ! in_array('webform', $types) ) {
+    return;
+  }
+  //Default data for webforms
+  $default = array(
+    'name' => ''
+  );
+  $names = array_flip(variable_get('llr_machine_names', array()));
+  foreach ( $nodes as $node ) {
+    if ( ! empty($node->uuid) && 'webform' == $node->type ) {
+      $node->llr_webform['name'] = !empty($names[$node->uuid]) ? $names[$node->uuid] : '';
+    }
+  } 
+}
+
+

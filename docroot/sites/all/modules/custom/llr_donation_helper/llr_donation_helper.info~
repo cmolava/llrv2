@@ -1,0 +1,7 @@
+name = LLR Donation Helper
+description = Controls Donation journey with CiviCRM
+core = 7.x
+dependencies[] = civicrm
+dependencies[] = webformcivicrm
+dependencies[] = llr_webform
+

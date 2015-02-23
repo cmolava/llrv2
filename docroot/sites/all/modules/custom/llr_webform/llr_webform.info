@@ -1,0 +1,6 @@
+name = Extended Webform
+description = Extensions and utilities for dealing with webform in custom code
+core = 7.x
+project = LLR
+dependencies[] = webform
+dependencies[] = ctools

@@ -1,0 +1,453 @@
+<?php
+/**
+ * @file llr_donation_helper.module
+ */
+
+/**
+ * Key used by webform_civicrm for embedding a civicrm contribution page
+ */
+define('WF_CONTRIB_ELEM', 'civicrm_1_contribution_1_contribution_contribution_page_id');
+
+/**
+ * Implements hook_menu()
+ */
+function llr_donation_helper_menu() {
+ $items = array();
+ $items['donate/start'] = array(
+   'title' => t('Donate'),
+   'page callback' => 'llr_donation_donate_start_page',
+   'access callback' => TRUE,
+   'file' => 'llr_donation_start_page.inc',
+   'type' => MENU_CALLBACK,
+ );
+ $items['donate/complete'] = array(
+   'title' => 'Thank you for your donation!',
+   'page callback' => 'llr_donation_complete_page',
+   'access callback' => 'llr_donation_donate_complete_access',
+   'file' => 'llr_donation_complete_page.inc',
+   'type' => MENU_CALLBACK,
+ );
+ return $items;
+}
+
+
+ 
+function llr_donation_helper_preprocess_page(&$variables) {
+  if ( llr_donation_is_a_donation_page() ) {
+    $variables['theme_hook_suggestion'] = 'page__bare';
+  }
+}
+
+/**
+ * Implements hook_theme_registry_alter()
+ */
+function llr_donation_helper_theme_registry_alter(&$registry) {
+  //
+  if ( empty($registry['page__bare']) ) {
+    $registry['page__bare'] = $registry['page'];
+  }
+  $registry['page__bare']['template'] = 'page--bare';
+  $registry['page__bare']['render element'] = 'page';
+  $registry['page__bare']['theme paths'][] = drupal_get_path('module', 'llr_donation_helper') . '/templates';
+  $registry['page__bare']['path'] = drupal_get_path('module', 'llr_donation_helper') . '/templates';
+}
+
+/**
+ * Implements hook_init()
+ */
+function llr_donation_helper_init() {
+  //Exclude donate start/complete pages from the page cache
+  $path = $_GET['q'];
+  if ( in_array($path , array('donate/start', 'donate/complete')) ) {
+    drupal_page_is_cacheable(FALSE);
+  }
+}
+
+/**
+ * Access callback for donation complete page
+ */
+function llr_donation_donate_complete_access() {
+  return TRUE;
+}
+
+/**
+ * Implements hook_preprocess_webform_progressbar()
+ */
+function llr_donation_helper_preprocess_webform_progressbar(&$variables) {
+  if ( empty($variables['node']->llr_webform['name']) || ! $variables['page_count'] ) {
+    return;
+  }
+  $name = $variables['node']->llr_webform['name'];
+  //We are only interested in donate forms.
+  if ( ! in_array($name, array('webform_donate_monthly', 'webform_donate_single')) ) {
+    return;
+  }
+
+   //The donate start form has been completed but is external to the
+  //webform so we prepend it to the progressbar
+  $variables['page_num']++;
+  $variables['page_count']++;
+  array_unshift($variables['page_labels'], $variables['page_labels'][0]);
+  $variables['page_labels'][1] = 'Personal Details';
+  $variables['percent'] = (($variables['page_num'] -1) / ($variables['page_count'] -1)) * 100;
+}
+
+/**
+ * Implements hook_civicrm_BuildForm()
+ *
+function llr_donation_helper_civicrm_BuildForm(&$formName, &$form) {
+}
+//**/
+
+/**
+ * Implements hook_form_alter()
+ */
+function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
+  $is_webform =  0 === strpos($form_id, 'webform_client_form');
+  if ( ! $is_webform ||  empty($form['#node']) || empty($form['#node']->llr_webform['name'])) {
+    return;
+  }
+  
+  $name = $form['#node']->llr_webform['name'];
+  $path = drupal_get_path('module', 'llr_donation_helper');
+  
+  //Is it a donate form?
+  if  (! in_array($name, array('webform_donate_monthly', 'webform_donate_single')) ) {
+    return;
+  }
+
+  //Values from donate start form
+  $prev_values = llr_webform_retrieve_values($name);
+  if ( empty( $prev_values['donate_amount']) ) {
+    //No donation amount, go to start
+    drupal_goto('donate/start');
+  }
+  
+  //Add submission handler
+   $form['#submit'][] = 'llr_donation_webform_donate_submit';
+  
+  //Set the title to include the donation amount
+  $amount =  llr_donation_get_donation_value($form_state, $prev_values, $name);
+  llr_donation_set_donation_title($name, $amount);
+
+   //hide webform's previous button, remove this block if requirements change
+  if ( ! empty($form['actions']['previous']) ) {
+   //   $form['actions']['previous']['#access'] = FALSE;
+   }
+
+  //Page 1 alterations
+  if ( 1 == $form_state['webform']['page_num'] ) {
+    //Add nudge
+    $nudge = llr_donation_get_nudge_for_amount($amount, $name);
+    drupal_add_js(array('LLRDonate' => array('nudge' => $nudge)), array(
+      'type' => 'setting',
+      'cache' => FALSE,
+      'preprocess' => FALSE,
+    ));
+    
+    //Previous button takes user to donate-start page.
+    
+    $form['actions']['llr_donate_to_start'] = array(
+      '#type' => 'submit',
+      '#value' => t('Previous'),
+      '#weight' => 5,
+      '#attributes' => array(
+        'class' => array('webform-previous'), 
+        'formnovalidate' => 'formnovalidate'
+      ),
+      '#limit_validation_errors' => array(),
+      '#submit' => array('llr_donation_helper_back_to_start'),
+
+      //Note, for now this is hidden. should
+       //requirements change, remove the line below
+ //     '#access' => FALSE,
+    );
+  }
+  
+  //Displaying a civi contribution payment page 
+  if ( ! empty( $form['submitted'][WF_CONTRIB_ELEM]) ) {
+    
+    //Prepopulate billing address fields 
+    $address =  llr_donation_billing_address_field_values($form_state);
+    drupal_add_js(array(
+      'LLRDonate' => array(
+        'billing_name_address_fields' => $address,
+      )
+    ), 'setting');
+
+    //Alter submit button label
+    $form['actions']['submit']['#value'] = t('Donate !amount',
+      array('!amount' => '£' . $amount));
+  } 
+
+  $form['#attributes']['class'][] = str_replace('_', '-', $name);
+  $form['#attached']['js'][] = $path . '/js/llr_donation.js';
+  $form['#attached']['css'][] = $path . '/css/llr_donation.css';
+}
+
+/**
+ * Submit handler for a named donate webform_client_form
+ */
+function llr_donation_webform_donate_submit($form, &$form_state) {
+  if ( empty($form_state['webform_completed']) ) {
+    return;
+  }
+  //Send details to the complete form
+  llr_webform_store_values('donate_complete', $form_state['values']);
+  $form_state['destination'] = '/donate/complete';
+}
+
+/**
+ * Submission handler for the back_to_start button
+ */
+function llr_donation_helper_back_to_start($form, &$form_state) {
+  $start_vals = llr_webform_retrieve_values($form['#node']->llr_webform['name']);
+  llr_webform_store_values('donate_start_form', $start_vals);
+  drupal_goto('donate/start');
+}
+
+/**
+ * Maps civi contact address fields to contribution billing address fields
+ */
+function llr_donation_billing_address_field_values( &$form_state) {
+  
+  //webform_civicrm renders Contribution payment as embedded snippets via an ajax callback
+  //We can access the form within hook_civicrm_BuildForm, however it is difficult
+  //to determine whethe the form is being built within the context of a webform.
+  //Instead, we send the address values as js settings and populate fields on the client.
+  civicrm_initialize();
+  $billing_data = array();
+  $contact_container = 'civicrm_1_contact_1_fieldset_fieldset';
+  $values = $form_state['values']['submitted'];
+  $contact_elements = $form_state['complete form']['submitted'][$contact_container];
+
+  if ( empty($contact_elements) ) {
+    return $billing_data;
+  }
+
+  $from_prefix = 'civicrm_1_contact_1_';
+  $billing_to_contact_map = array (
+    'billing_first_name' => 'contact_first_name',
+    'billing_last_name' => 'contact_last_name',
+    'billing_street_address-5' => 'address_street_address',
+    'billing_city-5' => 'address_city',
+    'billing_country_id-5' => 'address_country_id',
+    'billing_state_province_id-5' => 'address_state_province_id',
+    'billing_postal_code-5' => 'address_postal_code',
+  );
+
+  foreach ( $billing_to_contact_map as $b_field => $c_field ) {
+    $cid = $contact_elements[$from_prefix . $c_field]['#webform_component']['cid'];
+    $billing_data[$b_field] = $values[$cid];
+  }
+  
+  //Convert state province options
+
+  //The contact form uses abbreviations but the billing form uses civi internal id.
+  //Better to use civicrm_api but does not seem to provide state_province.
+  $state_provinces = CRM_Core_PseudoConstant::stateProvinceAbbreviation();
+  $key = array_search($billing_data['billing_state_province_id-5'], $state_provinces);
+  $billing_data['billing_state_province_id-5'] = $key;
+  
+  return $billing_data;
+}
+
+/**
+ * Gets the nudge setting for a particular donation amount.
+ */
+function llr_donation_get_nudge_for_amount($amount, $webform_name) {
+  $settings = variable_get('llr_donation', llr_donation_default_settings());
+  $key = str_replace('webform_donate_', 'nudges_', $webform_name);
+  if ( $settings[$key] ) {
+    $nudges = $settings[$key];          
+    foreach ( $nudges as $nudge ) {
+      $shortfall = $nudge['target_value'] - $amount; 
+      if ( $shortfall > 0 && $shortfall <= $nudge['threshold'] ) {
+        $nudge['text'] = str_replace('{shortfall}', $shortfall, $nudge['text']);
+        $nudge['shortfall'] = $shortfall;
+        $nudge['button_text'] = 'Go on then add £' . $shortfall;
+        return $nudge;
+      }
+    }
+  }
+}
+
+/**
+ * Helper function gets the current donation amount from the current
+ * donation webform.
+ *
+ * @params $form_state: The form_state array from a donation webform;
+ * @params $start_values: The data passed by the donate start form.
+ */
+function llr_donation_get_donation_value($form_state, $start_values=array(), $name='') {
+  $amount_form_key = 'civicrm_1_contribution_1_contribution_total_amount';
+  if ( ! empty($form_state['webform']['component_tree']['children']) ) {
+    foreach ( $form_state['webform']['component_tree']['children'] as $cid => $component ) {
+      $found_cid = $component['form_key'] == $amount_form_key; 
+      $val = ! empty($form_state['values']['submitted'][$cid]) ? $form_state['values']['submitted'][$cid] : '';
+      if ( $found_cid && $val ) {
+        //If a new value has been submitted it overrides the one from the start;
+        if ( $start_values && $name ) {
+          $start_values['donate_amount'] = $val;
+          llr_webform_store_values($name, $start_values);
+        }
+        return $val;
+      }
+    }
+  }
+  if ( ! empty($start_values['donate_amount']) ) {
+    return $start_values['donate_amount'];
+  }
+}
+
+/**
+ * Sets the page title for donation forms.
+ * @param $name: the name of the form llr_webform machine-name or form_id
+ * @param $amount : value of donation
+ */
+function llr_donation_set_donation_title($name, $amount) {
+    $params = array('!amount' => '£' . $amount);
+      $stitle['main'] =  t('You are donating !amount to beat blood cancer',$params);
+      $stitle['thankyou'] =  t('Thank you. Your donation of %amount to help beat blood cancer has been successful', $params);
+      $mtitle['main'] =  t('You are donating !amount a month to beat blood cancer', $params);
+      $mtitle['thankyou'] =  t('Thank you. Your donation of %amount a month to help beat blood cancer has been successful', $params);
+    if ( 'webform_donate_monthly' == $name ) {
+      $title = $mtitle['main'];
+    }
+    elseif ( 'webform_donate_single' == $name ) {
+      $title = $stitle['main'];
+    }
+    drupal_set_title($title);
+}
+
+/**
+ * Implements hook_webform_component_render_alter() 
+ *
+ */
+function llr_donation_helper_webform_component_render_alter(&$element, &$component) {
+  //Here we can access components by name rather than traverse form
+  //trees as we would need to do in a  form_alter
+  //Cache our data since this is called for each component in the form;
+  $data = &drupal_static(__FUNCTION__);
+  $nid = $component['nid'];
+  if ( ! isset($data[$nid]) ) {
+    $data[$nid] = array();
+    $name = llr_webform_get_name_by_id($nid);
+    if (!  $name ) {
+      return;
+    }
+    $data[$nid]['name'] = $name;
+    $data[$nid]['data'] = llr_webform_retrieve_values($name);
+  }
+  $values = $data[$nid]['data'];
+  switch ( $component['form_key'] ) {
+    case  'civicrm_1_contribution_1_contribution_total_amount' :
+      $amount = $element['#default_value']; 
+      //if $amount exists it is more recently submitted than $values
+      $element['#default_value'] = $amount? $amount : $values['donate_amount'];
+      $component['extra']['wrapper_classes'] .= 'populated';
+      break;
+    case  'civicrm_1_contribution_1_contribution_payment_processor_id' :
+      break;
+  }
+}
+
+/**
+ * Determines whether we are on a donation page() 
+ */
+function llr_donation_is_a_donation_page() {
+  static $ret = NULL;
+  if ( is_null($ret) ) {
+    $webforms = array(
+      'webform_donate_single', 
+      'webform_donate_monthly', 
+      'webform_donate_in_mem',
+    );
+    $paths = array(
+      'donate/start',
+      'donate/complete'
+    ); 
+    $path = $_GET['q'];
+    if ( in_array($path, $paths) ) {
+      $ret = TRUE;
+    }
+    else {
+      $node = menu_get_object();
+      $name = !empty($node->llr_webform['name']) ? $node->llr_webform['name'] : '';
+      $ret =  in_array($name, $webforms);
+    }
+  }
+  return $ret;
+}
+
+/**
+ * Some default settings
+ */
+function llr_donation_default_settings() {
+  return array(
+    'donation_amounts' => array(
+      array(
+        'value' => 3.0,
+        'fact' => 'For every £3 we receive we can do x',
+        'monthly' =>TRUE,  
+        'single' =>FALSE,  
+      ),
+      array(
+        'value' => 5.0,
+        'fact' => 'For every £5 we receive we can do x',
+        'monthly' =>TRUE,  
+        'single' =>TRUE,  
+      ),
+      array(  
+        'value' => 10.0,
+        'fact' => 'For every tenner we receive we can do x',
+        'monthly' =>TRUE,  
+        'single' =>TRUE,  
+      ),
+      array(
+        'value' => 20.0,
+        'fact' => 'For every £20 we receive we can do x',
+        'monthly' => FALSE,  
+        'single' =>TRUE,  
+      ),
+    ),
+    //nudges
+    'nudges_button_label' => 'Go on then, add £{shortfall}',
+    'nudges_accept_msg' => '',
+    'nudges_single' => array(
+      array(
+        'target_value' => 10.0,
+        'threshold' => 2,
+        'text' => 'Increasing your donation by just £{shortfall} means that we can xxxxxxxx ten pounds.',
+
+      ),
+      array(
+        'target_value' => 100.0,
+        'threshold' => 20,
+        'text' =>  'Increasing your donation by just £{shortfall} means that we can xxxxxxxx one hundred pounds.',
+      ),
+    ),//end nudges_single
+    'nudges_monthly' => array(
+      array(
+        'target_value' => 4.0,
+        'threshold' => 2,
+        'text' => 'Increasing your donation by just £{shortfall} a month means that we can xxxxxxxx ten pounds.',
+
+      ),
+      array(
+        'target_value' => 11.0,
+        'threshold' => 3,
+        'text' =>  'Increasing your donation by just £{shortfall}  a month means that we can xxxxxxxx one hundred pounds.',
+      ),
+    ),//end nudges_single
+    'titles_single' => array(
+      'main' => 'You are donating £{amount} to beat blood cancer',
+      'thank_you' => '',
+    ),
+    'titles_monthly' => array(
+      'main' => 'You are donating £{amount} a month to beat blood cancer',
+      'thank_you' => '',
+    ),
+  );
+}
+
