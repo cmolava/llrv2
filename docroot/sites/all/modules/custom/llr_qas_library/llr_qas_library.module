@@ -1,0 +1,41 @@
+<?php
+/**
+ * Implements hook_help()
+ */
+function llr_qas_library_help($path, $arg) {
+  if ($path == 'admin/help#llr_qas_library') {
+    $output = '<p>';
+    $output .= 'This module does not do anything on its own. It\'s sole purpose'
+      . ' is to make available the QAS classes for other modules to use.'
+      . ' Modules that rely on the QAS library should add this module as a'
+      . ' dependency.';
+    $output .= '</p>';
+
+    $output = '<p>';
+    $output .= 'The library is a slightly modified version of the code that'
+      . ' came in the \'civicrm_postcode_lookup\' module. The alterations made'
+      . ' were to parameterise the username/password and WSDL file path values'
+      . ' for the QASCapture class so that different modules could utilise'
+      . ' separate accounts';
+    $output .= '</p>';
+
+    $output .= '<p>';
+    $output .= 'For example usage, see the \'llr_postcode_lookup\' module.';
+    $output .= '</p>';
+
+    $output .= '<ul>';
+    $output .= '<li>http://support.qas.com/search-results.htm?transactionId=&q=PHP</li>';
+    $output .= '<li>http://support.qas.com/pro_on_demand_php_sample_code_1700.htm</li>';
+    $output .= '<li>http://www.qas.com/downloads/pdf/support/v6/pro%20web/webrefcommon.pdf</li>';
+    $output .= '<li>http://support.qas.com/proweb</li>';
+    $output .= '</ul>';
+
+    $output .= '<p>';
+    $output .= 'Due to server (we think) issues, we\'ve also downloaded the remote schemas'
+      . ' xmldsig-core-schema.xsd and oasis-200401-wss-wssecurity-secext-1.0.xsd'
+      . ' and altered references to them making them relative links.';
+    $output .= '</p>';
+
+    return $output;
+  }
+}

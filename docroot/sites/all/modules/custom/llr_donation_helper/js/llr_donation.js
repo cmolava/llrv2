@@ -49,10 +49,59 @@ if ( typeof cj === 'function' ) {
 //end civi jquery
 
 (function($, Drupal) {
- 
+  
+  //Postcode lookup and address
+  $(document).ready(function (){
+    //settings provided by llr_postcode_lookup module
+   var settings = Drupal.settings['llrPostcodeLookup'] || [],
+     $donateForm = $('form.webform-donate-single, form.webform-donate-monthly'),
+     //postcode lookup input fields which have been injected into the form
+     $pclInputs = $('.llr-postcode-lookup-input', $donateForm),
+     $pclInputsWpr,
+     $pclManual = $('.llr-postcode-lookup-input-manual-entry', $donateForm),
+     $addrFields = $(),
+     $countrySelect = $('select[id$=address-country-id]', $donateForm);
+    if ( ! $donateForm.length || ! settings || ! $pclManual.length ) {
+      return;
+    }
+    formId = $donateForm.attr('id');
+    addrFieldIds = settings.forms[formId]['target']['formToQasFieldMap'];
+    
+    var fid, wpr;
+    for ( fid in addrFieldIds ) {
+      if ( addrFieldIds.hasOwnProperty(fid) ) {
+        wpr = $('#' + fid).parents('div.form-item');
+        $addrFields = $addrFields.add(wpr);
+      }
+    }
+    //Inially hide address fields
+    $addrFields.hide();
+
+    //Show address fields to enter address manually,
+    $pclManual.change(function() { 
+      $addrFields.toggle($(this).val());
+    });
+
+    //Show address fields when populated by postcode lookup
+    $(document).bind('llr_postcode_lookup.targetFormPopulated',function(e) {
+      $addrFields.show();                
+    });
+
+    //Hide Postcode lookup fields when country is not UK 
+    $pclInputsWpr = $pclInputs.parents('.form-item')
+        .add('.llr-postcode-lookup-find-container');
+    $countrySelect.change(function() {
+     var cid = $(this).val(),
+      name = $(this).find('option[value=' + cid +']').text();
+      $pclManual.prop('checked', true).trigger('change');
+      $pclInputsWpr.toggle('United Kingdom' == name);
+    });
+                   
+  });// end postcode lookup ready()
+
+  //Donation start page
   $(document).ready(function() {
     
-    //Donation start page
     if ( $('form#llr-donation-donate-start-form').length) {
       //Bind body class to donation_options selection
       initDonationOptions();

@@ -1,0 +1,8 @@
+name = "LLR QAS library"
+description = "Make the QAS library available to other modules standalone"
+core = 7.x
+package = LLR
+files[] = llr_qas_library.module
+files[] = QASCapture.php
+files[] = CommonClasses.php
+files[] = IQASCapture.php

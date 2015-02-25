@@ -1,0 +1,80 @@
+/*
+ * Default styling for module
+ 
+   All search forms have class 'llr-postcode-lookup-query-form'. Their #id is
+   suffixed with their index value E.g 'llr-postcode-lookup-query-form-0'
+ */
+
+ /* Search form */
+.llr-postcode-lookup-query-form,
+.llr-postcode-lookup-test-user-form,
+.llr-postcode-lookup-commerce-form
+{
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+/* Input container */
+.llr-postcode-lookup-container {
+  margin: 0;
+  padding: 0;
+}
+
+.llr-postcode-lookup-container .form-item {
+  clear: none;
+}
+
+/* Input controls */
+.llr-postcode-lookup-input,
+input.llr-postcode-lookup-input-house-number,
+input.llr-postcode-lookup-input-postcode {
+  width: 25em !important;
+}
+
+/* Container for and link to trigger the search */
+.llr-postcode-lookup-find-container {
+  display: inline-block;
+  margin-top: 1em;
+}
+
+.find-link {
+}
+
+/* Container that search results/messages are populated into */
+.query-results {
+	clear: both;
+  height: 100px;
+  overflow-y: scroll; /* non-standard */
+  border: 1px solid #BEBEBE;
+  display: none; /* hide by default and let jQuery show */
+}
+
+/* Search results */
+.query-results ul.suggested-address-list {
+  list-style-type: none;
+  padding: 5px 0;
+  margin: 0;
+}
+
+/* A single search result content in the query results <ul><li /></ul> */
+a.suggested-address {
+}
+
+/* Target form update status messages */
+.target-update-status {
+  padding: 0;
+}
+
+.target-update-status #container {
+  padding: 5px 0;
+  background-color: #E0E0E0;
+}
+
+/* Default throbber from /misc and /modules/system/system.base.css */
+.throbber {
+  background: transparent url(throbber.gif) no-repeat 0px -18px;
+  display: inline-block;
+  height: 15px;
+  width: 15px;
+  margin-right: 2px;
+}

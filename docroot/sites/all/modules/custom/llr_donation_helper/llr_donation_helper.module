@@ -34,7 +34,7 @@ function llr_donation_helper_menu() {
  
 function llr_donation_helper_preprocess_page(&$variables) {
   if ( llr_donation_is_a_donation_page() ) {
-    $variables['theme_hook_suggestion'] = 'page__bare';
+////    $variables['theme_hook_suggestion'] = 'page__bare';
   }
 }
 
@@ -107,7 +107,6 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
   if ( ! $is_webform ||  empty($form['#node']) || empty($form['#node']->llr_webform['name'])) {
     return;
   }
-  
   $name = $form['#node']->llr_webform['name'];
   $path = drupal_get_path('module', 'llr_donation_helper');
   
@@ -132,9 +131,14 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
 
    //hide webform's previous button, remove this block if requirements change
   if ( ! empty($form['actions']['previous']) ) {
-   //   $form['actions']['previous']['#access'] = FALSE;
+      $form['actions']['previous']['#access'] = FALSE;
    }
 
+ //   kpr($form);
+  //Add postcode lookup to contact address
+  if ( ! empty($form['submitted']['civicrm_1_contact_1_fieldset_fieldset']) ) {
+    llr_donate_insert_postcode_lookup($form);
+  }
   //Page 1 alterations
   if ( 1 == $form_state['webform']['page_num'] ) {
     //Add nudge
@@ -160,13 +164,12 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
 
       //Note, for now this is hidden. should
        //requirements change, remove the line below
- //     '#access' => FALSE,
+      '#access' => FALSE,
     );
   }
   
   //Displaying a civi contribution payment page 
   if ( ! empty( $form['submitted'][WF_CONTRIB_ELEM]) ) {
-    
     //Prepopulate billing address fields 
     $address =  llr_donation_billing_address_field_values($form_state);
     drupal_add_js(array(
@@ -351,6 +354,83 @@ function llr_donation_helper_webform_component_render_alter(&$element, &$compone
       break;
   }
 }
+
+function llr_donate_insert_postcode_lookup(&$form) {
+  //These address field names are for civi contact in webform
+  //(assuming the default label for the contact is used: contact 1);
+  //Need to separate the address representations from the mechanics
+  //of bridging Qas API with drupal form API.
+  //(Perhaps good candidate for OOP implementation)
+  
+   
+  $address_container = 'civicrm_1_contact_1_fieldset_fieldset';
+  //Webform components are children of 'submitted' element
+  if ( empty($form['submitted'][$address_container]) ) {
+    return;
+  }
+  $form_id = 'webform-uuid-' . $form['#node']->uuid;
+  $prefix = 'civicrm_1_contact_1_address';
+  //A base mapping for address fields
+  //Values are the format used by Qas, Keys are civi/webform
+  $base_map = array(
+    'street_address' => 'addr_line_1',
+    'supplemental_address_1' => 'addr_line_2',
+    'city' => 'town',
+    'postal_code' => 'postcode',
+    //Only UK supported so country not in mapping
+//    'country_id' => , 
+    'state_province_id' => 'county',
+  );
+
+  foreach ( $base_map as $fname => $qname ) {
+    $name = str_replace('_', '-', 'edit-submitted-' . $address_container . '-' . $prefix . '-' . $fname);
+    $qas_map[$name] = $qname;
+  }
+  $config = array (
+    'showHouseNo' => FALSE,
+    'targetIsSrc' => TRUE,
+    'index' => 0,
+    'lookupControlsContainerClass' => '',
+    'input' => array(
+      'houseNo' => 0,
+      'postcode' => 0,
+    ),
+    //Info about the form with address fields to populate
+    'target' => array(
+      //
+      'id' => $form_id,
+      'dynamicFieldIds' => FALSE,
+      'formToQasFieldMap' => $qas_map,
+    ),
+  );  
+  drupal_add_library('system', 'drupal.ajax');
+  //Get the form elements for lookup as renderable array
+  $lookup_form_elements = llr_postcode_lookup_raw_query_form_elements($config);
+   //The container may have non-address fields but we expect address fields to be contiguous, with  country first.
+  //Country should be first so we can hide the postcode lookup for non-UK
+  //Seek and insert after element
+  $offset = 1;
+  $elem = $prefix . '_country_id';
+  foreach( $form['submitted'][$address_container] as $k => $v ) {
+    if ( $k == $elem ) {
+      break;
+    }
+    $offset++;
+  }
+  $form['submitted'][$address_container] = llr_postcode_lookup_merge_lookup_controls($form['submitted'][$address_container], $lookup_form_elements, $offset);
+  
+  //Adjust weights
+  $elems = element_children($form['submitted'][$address_container]);
+  $i = $form['submitted'][$address_container][$elems[0]]['#weight'];
+  foreach ( $elems as $key ) {
+    $form['submitted'][$address_container][$key]['#weight'] = $i;
+    $i++;
+  }
+  //Add js and settings
+  llr_postcode_lookup_add_query_form_attachments($form);
+  llr_postcode_lookup_add_script_settings($form_id, $config);
+}
+
 
 /**
  * Determines whether we are on a donation page() 

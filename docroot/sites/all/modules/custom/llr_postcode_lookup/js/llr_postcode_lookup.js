@@ -1,0 +1,332 @@
+Drupal.llrPostcodeLookup = {};
+
+(function($) {
+  Drupal.behaviors.llrPostcodeLookup = {
+    attach: function(context, settings) {
+      if ('undefined' === typeof(settings.llrPostcodeLookup)) {return}
+      for(var id in settings.llrPostcodeLookup.forms) {
+        var srcFormId = id;
+        var targetFormId = settings.llrPostcodeLookup.forms[id].target.id;
+
+        if (settings.llrPostcodeLookup.forms[id].isCommerce) {
+          // Find the actual form/@id value. Our form was added as a <fieldset />
+          // as it was added via a Commerce pane/widget
+          var parentFormId = $('#' + id).closest('form').attr('id');
+          // Update settings to reflect the found form @id
+          Drupal.llrPostcodeLookup.updateSettingsForCommerce(id, parentFormId);
+
+          srcFormId = parentFormId;
+          targetFormId = parentFormId;
+
+          // Default state of form is dependent on country selected
+          // @todo Not just for Commerce forms
+          Drupal.llrPostcodeLookup.defaultFormState(srcFormId);
+        }
+
+        // Additional things to happen on cliking 'Find my address'
+        $('#' + srcFormId + ' .find-link').bind('click', function(event) {
+          $('.query-results').show();
+        });
+
+        // Deal with clicking in the 'Manually enter address' checkbox
+        $('#' + srcFormId + ' .llr-postcode-lookup-input-manual-entry').bind('click', {'srcFormId': srcFormId}, function(event) {
+          if ($(this).is(':checked')) {
+            $('.street-block').show();
+            $('.locality-block').show();
+          }
+          else {
+            $('.street-block').hide();
+            $('.locality-block').hide();
+          }
+        });
+
+        $('form#' + srcFormId + ' .find-link').bind('click', {'srcFormId': srcFormId, 'targetFormId': targetFormId}, function(event) {
+          var src = event.data.srcFormId;
+          var target = event.data.targetFormId;
+
+          Drupal.llrPostcodeLookup.setResults(src, 'Searching...');
+          Drupal.llrPostcodeLookup.getInput(src);
+
+          if (Drupal.llrPostcodeLookup.inputErrors(src)) {
+            Drupal.llrPostcodeLookup.setResults(src, 
+              'A valid postcode value is required to search E.g. WC1R 4TH (inc. space)');
+          }
+          else {
+            Drupal.llrPostcodeLookup.queryByPostcode(src, target);
+          }
+
+          return false;
+        });
+      }
+    }
+  }
+
+  // Search QAS with a valid UK postcode (and optional house number)
+  Drupal.llrPostcodeLookup.queryByPostcode = function(srcFormId, targetFormId) {
+    $.ajax({
+      url: Drupal.settings.basePath + 'llr_postcode_lookup/qas/' + 
+        Drupal.settings.llrPostcodeLookup.forms[srcFormId].input.houseNo + '/' + 
+        Drupal.settings.llrPostcodeLookup.forms[srcFormId].input.postcode,
+      success: function(data) {
+        var result = $.parseJSON(data);
+        var content = Drupal.llrPostcodeLookup.formatSearchResults(result);
+
+        Drupal.llrPostcodeLookup.setResults(srcFormId, content);
+
+        // Handle clicks on (each of) the resultant address(es)
+        $('form#' + srcFormId + ' .suggested-address').each(function(index) {
+          $(this).bind('click', {'moniker': this.id}, function(event) {
+            // Show the default Drupal AJAX 'throbber'
+            $(this).prepend('<span class="throbber">&nbsp;</span>');
+
+            Drupal.llrPostcodeLookup.setStatus(srcFormId, 'Populating from your selection...');
+
+            var formIds = {
+              'src': srcFormId,
+              'target': targetFormId
+            };
+            Drupal.llrPostcodeLookup.queryByMoniker(event.data, formIds);
+
+            return false;
+          });
+        });
+      },
+      error: function(jqXHR, textStatus, errorThrown) {
+        Drupal.llrPostcodeLookup.setResults(srcFormId, 
+          'Error retrieving addresses, please try again');
+      }
+    });
+  }
+
+  // Set content of the results container element
+  Drupal.llrPostcodeLookup.setResults = function(formId, msg) {
+    $('form#' + formId + ' .query-results').html(msg);
+  }
+
+  // Set content of the update status container element
+  Drupal.llrPostcodeLookup.setStatus = function(formId, msg) {
+    $('form#' + formId + ' .target-update-status').html(msg);
+  }
+
+  // Get user inputted values
+  Drupal.llrPostcodeLookup.getInput = function(formId) {
+    var selector = 'form#' + formId;
+    var hn = $(selector + ' .llr-postcode-lookup-input-house-number').val();
+    var cleanHn = 0;
+    var pc = $(selector + ' .llr-postcode-lookup-input-postcode').val();
+    var cleanPc = 0;
+
+    if (Drupal.settings.llrPostcodeLookup.forms[formId].showHouseNo) {
+      var re = /[\-\+\s]+/g;
+      cleanHn = hn.replace(re, '');
+      if($.isNaN(cleanHn)) {
+        cleanHn = 0;
+      }
+    }
+
+    cleanPc = $.trim(pc);
+    if(!Drupal.llrPostcodeLookup.postcodeIsBS7666(cleanPc)) {
+      cleanPc = 0;
+    }
+
+    Drupal.settings.llrPostcodeLookup.forms[formId].input.houseNo = cleanHn;
+    Drupal.settings.llrPostcodeLookup.forms[formId].input.postcode = cleanPc;
+  }
+
+  // Check valid UK postcode. Note this includes a space in middle. 
+  // E.g 'WC1R4TH' is NOT valid, 'WC1R 4TH' IS valid
+  // http://en.wikipedia.org/wiki/Postcodes_in_the_United_Kingdom
+  Drupal.llrPostcodeLookup.postcodeIsBS7666 = function(postcode) {
+    var re = /^(GIR 0AA)|(((A[BL]|B[ABDFHLNRSTX]?|C[ABFHMORTVW]|D[ADEGHLNTY]|E[HNX]?|F[KY]|G[LUY]?|H[ADGPRSUX]|I[GMPV]|JE|K[ATWY]|L[ADELNSU]?|M[EKL]?|N[EGNPRW]?|O[LX]|P[AEHLOR]|R[GHM]|S[AEGKLMNOPRSTY]?|T[ADFNQRSW]|UB|W[ADFNRSV]|YO|ZE)[1-9]?[0-9]|((E|N|NW|SE|SW|W)1|EC[1-4]|WC[12])[A-HJKMNPR-Y]|(SW|W)([2-9]|[1-9][0-9])|EC[1-9][0-9]) [0-9][ABD-HJLNP-UW-Z]{2})$/i; 
+    if (re.test(postcode)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Ascertain if minimum input is not provided
+  Drupal.llrPostcodeLookup.inputErrors = function(formId) {
+    var houseNo = Drupal.settings.llrPostcodeLookup.forms[formId].input.houseNo;
+    var postcode = Drupal.settings.llrPostcodeLookup.forms[formId].input.postcode;
+    if (postcode == 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Format the returned data into something usable
+  Drupal.llrPostcodeLookup.formatSearchResults = function(data) {
+    var content = '<ul class="suggested-address-list">';
+
+    for(var i in data.items) {
+      if (data.items.hasOwnProperty(i)) {
+        if (data.items[i].isInformation) {
+          // Something occured meaning that no results. Display the reason
+          content += '<li>' + data.items[i].text + '</li>';
+          content += '<li>Please try again</li>';
+          break;
+        }
+        else {
+          content += '<li><a id="' + data.items[i].moniker + '" class="suggested-address" href="#">' + 
+            data.items[i].text + ' ' + data.items[i].postcode + '</a></li>';
+        }
+      }
+    }
+    content += '</ul>';
+
+    return content;
+  }
+
+  // Clear current address details that may have been set, ignoring country
+  // field and the user inputted controls
+  Drupal.llrPostcodeLookup.clearTargetForm = function(formId) {
+    var map = Drupal.settings.llrPostcodeLookup.forms[formId].target.formToQasFieldMap;
+    $.each(map, function(key, value) {
+      if (Drupal.settings.llrPostcodeLookup.forms[formId].target.dynamicFieldIds) {
+        key = Drupal.llrPostcodeLookup.cleanDynamicId(key)
+      }
+
+      $('#' + key).val('');
+      $('#' + key).prevAll('label').eq(0).show();
+    });
+  }
+
+  // Populate form UK address field values from the structured address returned
+  // after querying using a specific moniker
+  Drupal.llrPostcodeLookup.populateTargetForm = function(formIds, addr) {
+    Drupal.llrPostcodeLookup.setStatus(formIds.src, '');
+    var map = Drupal.settings.llrPostcodeLookup.forms[formIds.src].target.formToQasFieldMap;
+    $('#' + formIds.target + ' :input').each(function(index) {
+      var id = this.id;
+      // Some target form fields have dynamic #id values where the #id value is
+      // suffixed with '--n' (where 'n' is a number). If we know we're dealing
+      // with this sort of form we need to remove the suffix before using the 
+      // #id in the field to QAS value lookup. Commerce shipping address is an 
+      // example of this (I believe, as it's based on AddressField)
+      if (Drupal.settings.llrPostcodeLookup.forms[formIds.src].target.dynamicFieldIds) {
+        id = Drupal.llrPostcodeLookup.cleanDynamicId(id);
+      }
+      if (map.hasOwnProperty(id)) {
+        var mappingId = map[id];
+        $(this).val(addr[mappingId]);
+
+        // Deal with the control compact label
+        // @todo settings flag to indicate label type?
+        if (addr[mappingId] != '') {
+          $(this).prevAll('label').eq(0).hide();
+        }
+        else {
+          $(this).prevAll('label').eq(0).show();
+        }
+      }
+
+      // @todo isCommerce form #id selector
+      $('.street-block').show();
+      $('.locality-block').show();
+    });
+    // Allow other js to respond to this event.
+    $(document).trigger('llr_postcode_lookup.targetFormPopulated', addr);
+  }
+
+  // Retrieve structured address details using a moniker
+  Drupal.llrPostcodeLookup.queryByMoniker = function(paramMap, formIds) {
+    $.ajax({
+      url: Drupal.settings.basePath + 'llr_postcode_lookup/qas/moniker',
+      type: 'POST',
+      data: {'moniker': paramMap.moniker},
+      dataType: 'json',
+      success: function(data) {
+        var addr = $.parseJSON(data);
+
+        // If a result was returned, do something with it
+        if (!$.isEmptyObject(addr)) {
+          $('#' + formIds.src + ' .llr-postcode-lookup-input-manual-entry').closest('div.form-item').hide();
+          $('#' + formIds.src + ' .query-results').hide();
+          // Got an structured address, populate the target form
+          Drupal.llrPostcodeLookup.populateTargetForm(formIds, addr);
+        }
+        else {
+          // Address was empty, but there was no error
+          Drupal.llrPostcodeLookup.setStatus(formIds.src, 
+            'Address details were empty!');
+        }
+      },
+      error: function(jqXHR, textStatus, errorThrown) {
+        Drupal.llrPostcodeLookup.setStatus(srcFormId, errorThrown);
+      },
+      complete: function(jqXHR, textStatus) {
+        // Remove the throbber on selected address
+        $('#' + formIds.src + ' .suggested-address-list .throbber').remove();
+      }
+    });
+  }
+
+  // Effectively rename the forms[id] property. Copies existing undesired 
+  // name and deletes the original
+  // @todo Because the behavior is run more than once, and although this works
+  // as intended the first time, we end up with both the desired and the 
+  // undesired objects here. How can you remove? There's .once()
+  Drupal.llrPostcodeLookup.updateSettingsForCommerce = function(eleId, formId) {
+    if (!Drupal.settings.llrPostcodeLookup.forms.hasOwnProperty(formId)) {
+      Drupal.settings.llrPostcodeLookup.forms[formId] = Drupal.settings.llrPostcodeLookup.forms[eleId];
+      Drupal.settings.llrPostcodeLookup.forms[formId].target.id = formId;
+
+      delete Drupal.settings.llrPostcodeLookup.forms[eleId];
+    }
+  }
+
+  // Service only availabe for UK addresses, so if not a UK address the form 
+  // needs some elements showing hiding
+  Drupal.llrPostcodeLookup.defaultFormState = function(formId) {
+    var countryCode = $('#' + formId + ' select.country').val();
+    var container = Drupal.settings.llrPostcodeLookup.forms[formId].lookupControlsContainerClass;
+
+    // Hide/show the input controls dependant on country
+    if (countryCode != 'GB') {
+      // Hide the postcode lookup controls
+      $('.' + container).hide();
+      // @todo tick the lookup control checkbox so that it can be toggled off?
+    }
+    else {
+      if (container !== '') {
+        $('.' + container).show();
+      }
+      // If the target is already populated, it needs to be visible, whether the
+      // checkbox is ticked or not
+      var targetPopulated = Drupal.llrPostcodeLookup.targetAlreadyPopulated(formId);
+      if (!targetPopulated) {
+        $('.street-block').hide();
+        $('.locality-block').hide();
+      }
+    }
+  }
+
+  // Determine whether or not a form has already got an address set
+  Drupal.llrPostcodeLookup.targetAlreadyPopulated = function(formId) {
+    var hasAddress = false;
+    var targetFormId = Drupal.settings.llrPostcodeLookup.forms[formId].target.id;
+    var targetFields = Drupal.settings.llrPostcodeLookup.forms[formId].target.formToQasFieldMap;
+
+    // Check each of the target form fields for a value
+    $.each(targetFields, function(key, value) {
+      if ($('#' + targetFormId + ' input[id^=' + key + ']').val() != '') {
+        hasAddress = true;
+      }
+    });
+
+    return hasAddress;
+  }
+
+  // Cleanup dynamic id, so it can be better used in a selector
+  Drupal.llrPostcodeLookup.cleanDynamicId = function(id) {
+    var re = /(-{1,2}\d+)$/;
+
+    if (re.test(id)) {
+      id = id.replace(re, '');
+    }
+
+    return id;
+  }
+})(jQuery);

@@ -1,0 +1,9 @@
+name = "LLR Postcode lookup"
+description = "LLR custom module that enables use of the Experian QAS postcode lookup service in a form."
+core = 7.x
+package = LLR
+dependencies[] = llr_qas_library
+files[] = llr_postcode_lookup.module
+files[] = qas/QASCapture.php
+files[] = qas/CommonClasses.php
+files[] = qas/IQASCapture.php

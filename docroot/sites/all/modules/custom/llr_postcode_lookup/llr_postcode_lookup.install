@@ -1,0 +1,18 @@
+<?php
+/**
+* @file
+* 
+*/
+
+/*
+ * Implements hook_install()
+ */
+function llr_postcode_lookup_install() {
+}
+
+/*
+ * Implements hook_uninstall()
+ *
+ */
+function llr_postcode_lookup_uninstall() {
+}

@@ -1,0 +1,993 @@
+<?php
+// The llr_qas_library module is a dependency of this one
+require_once(drupal_get_path('module', 'llr_qas_library') . '/lib/QASCapture.php');
+
+/**
+ * Implements hook_help()
+ */
+function llr_postcode_lookup_help($path, $arg) {
+  if ($path == 'admin/help#llr_postcode_lookup') {
+    return '<p>See the README file in the module directory.</p>';
+  }
+}
+
+/**
+ * Implements hook_menu()
+ */
+function llr_postcode_lookup_menu() {
+  // Configure module
+  $items['admin/config/services/llr_postcode_lookup'] = array(
+    'title' => 'LLR Postcode lookup',
+    'title callback' => 't',
+    'description' => t('Configure settings related to the postcode lookup module/service'),
+    'page callback' => 'llr_postcode_lookup_module_config_page',
+    'page arguments' => array(''),
+    'access arguments' => array('administer users'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  // Page demonstrating QAS integration
+  $items['llr_postcode_lookup/test'] = array(
+    'title' => t('Drupal/QAS service test form'),
+    'title callback' => 't',
+    'page callback' => 'llr_postcode_lookup_test_page',
+    'access arguments' => array('administer users'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+
+  // Deal with the user not having js enabled
+  $items['llr_postcode_lookup/qas/nojs/%/%'] = array(
+    'page callback' => 'llr_postcode_lookup_redirect_for_no_js',
+    'page arguments' => array(),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  // Deal with an actual actual AJAX request
+  $items['llr_postcode_lookup/qas/%/%'] = array(
+    'page callback' => 'llr_postcode_lookup_query_qas',
+    'page arguments' => array(2, 3),
+    'access callback' => 'user_access',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  // Get structured address from a returned moiker
+  $items['llr_postcode_lookup/qas/moniker'] = array(
+    'page callback' => 'llr_postcode_lookup_query_qas_by_moniker',
+    'access callback' => 'user_access',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Module settings/information page
+ * 
+ * @return
+ *   Renderable array
+ */
+function llr_postcode_lookup_module_config_page() {
+  $page = array();
+
+  $page['test_form_link'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => l(t('Test form'), 'llr_postcode_lookup/test'),
+  );
+
+  $page['hard-coded_qas_query_link'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => l(t('Test QAS query for "WC1R 4TH" (returning JSON)'), 'llr_postcode_lookup/qas/0/WC1R4TH'),
+  );
+
+  return $page;
+}
+
+/**
+ * Assemble test form page components for display
+ * 
+ * This service is only used for UK addresses. If we're looking at integrating 
+ * this functionality with AddrerssField widgets, not all addresses (I.e non-UK)
+ * have a postcode field.
+ * 
+ * @return
+ *   Renderable array
+ */
+function llr_postcode_lookup_test_page() {
+  $page = array();
+
+  $page['summary_1'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => 'Form to query the QAS web service for UK (only) address 
+      details using a postcode and optional house number. To get 
+      <em>structured</em> address details for a specific address requires a 
+      minimum of two HTTP requests to the QAS service.',
+  );
+
+  $page['summary_2'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => 'First query retrieves a list of possible addresses returning a
+      moniker enabling a second query to be submitted that returns address 
+      detailed with address lines 1/2, town, county, city and postcode.',
+  );
+
+  // Test form 1
+  // Configure the lookup/target form info
+  $config = array(
+    'index' => 0,
+    'showHouseNo' => FALSE,
+    'targetIsSrc' => FALSE,
+    'isCommerce' => FALSE,
+    'lookupControlsContainerClass' => '',
+    'input' => array(
+      'houseNo' => 0,
+      'postcode' => 0,
+     ),
+    'target' => array(
+      'id' => 'llr-postcode-lookup-user-form',
+      'dynamicFieldIds' => FALSE,
+      'formToQasFieldMap' => array(
+        'edit-addr1' => 'addr_line_1',
+        'edit-addr2' => 'addr_line_2',
+        'edit-addr3' => 'county',
+        'edit-addr5' => 'postcode',
+        'edit-addr4' => 'town',
+      ),
+    ),
+  );
+
+  $form_text = array(
+    'title' => t('Postcode lookup: Postcode only'),
+    'description' => t('Lookup address using the postcode field only.'),
+  );
+
+  // Form used for user input/search/results
+  $page['lookup_form_' . $config['index']] = drupal_get_form('llr_postcode_lookup_query_form', $config, $form_text);
+
+  // Form(s) that will be populated from a selected search result
+  $page['user_form'] = drupal_get_form('llr_postcode_lookup_user_form');
+
+  // Test form 2
+  // Demonstrate ability to have more than one lookup on a page
+  $config = array(
+    'index' => 1,
+    'showHouseNo' => TRUE,
+    'targetIsSrc' => FALSE,
+    'isCommerce' => FALSE,
+    'lookupControlsContainerClass' => '',
+    'input' => array(
+      'houseNo' => 0,
+      'postcode' => 0,
+    ),
+    'target' => array(
+      'id' => 'llr-postcode-lookup-commerce-form',
+      'dynamicFieldIds' => TRUE,
+      'formToQasFieldMap' => array(
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-thoroughfare' => 'addr_line_1',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-premise' => 'addr_line_2',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-administrative-area' => 'county',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-postal-code' => 'postcode',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-locality' => 'town',
+      ),
+    )
+  );
+
+  $form_text = array(
+    'title' => t('Postcode lookup: House number and postcode'),
+    'description' => t('Lookup address using optional house number and mandatory postcode.'),
+  );
+
+  $page['lookup_form_' . $config['index']] = drupal_get_form('llr_postcode_lookup_query_form', $config, $form_text);
+  $page['commerce_form'] = drupal_get_form('llr_postcode_lookup_commerce_form');
+
+  // Test form 3
+  $page['target_is_src_form'] = drupal_get_form('llr_postcode_lookup_target_is_src_form');
+
+  return $page;
+}
+
+/**
+ * Form enabling user to query the QAS service
+ * 
+ * This form is used in conjunction with another, target, form. This form 
+ * captures input and shows QAS results, the target form is that which will have
+ * its values set from a selected search result.
+ *
+ * @param array $config
+ *   Form meta/configuration data. Enables the QAS results to map to target form
+ *   fields etc. Made available in front-end Drupal.settings.llrPostcodeLookup.*
+ *
+ * @param array $form_text
+ *   Text to insert in the form. Two element associative array with keys 'title'
+ *   and 'description'.
+ *
+ * @return array
+ *   Drupal Form API form
+ */
+function llr_postcode_lookup_query_form($form, &$form_state, $config, $form_text) {
+  // To use AJAX links (the 'Find' link on this form), add the required library
+  // Drupal sorts out not including external files more than once
+  drupal_add_library('system', 'drupal.ajax');
+
+  $form = array();
+
+  // Add script and CSS
+  llr_postcode_lookup_add_query_form_attachments($form);
+
+  // Custom form id so that we can have more than one on the page
+  $custom_form_id = llr_postcode_lookup_generate_custom_html_id($config['index']);
+
+  // Set some <form /> attribute values
+  llr_postcode_lookup_set_form_attributes($form, $custom_form_id);
+
+  // Append Drupal.settings
+  llr_postcode_lookup_add_script_settings($custom_form_id, $config);
+
+  if (isset($form_text['title'])) {
+    $form['form_title'] = array(
+      '#type' => 'markup',
+      '#prefix' => '<h2>',
+      '#suffix' => '</h2>',
+      '#markup' => $form_text['title'],
+    );
+  }
+
+  if (isset($form_text['description'])) {
+    $form['form_description'] = array(
+      '#type' => 'markup',
+      '#prefix' => '<p>',
+      '#suffix' => '</p>',
+      '#markup' => $form_text['description'],
+    );
+  }
+
+  return $form + llr_postcode_lookup_raw_query_form_elements($config);
+}
+
+/**
+ * Return an array describing the lookup form elements.
+ */
+function llr_postcode_lookup_raw_query_form_elements($config) {
+  if ($config['showHouseNo']) {
+    $form['house_number'] = array(
+      '#type' => 'textfield',
+      '#title' => t('House number'),
+      '#required' => FALSE,
+      '#default_value' => '',
+      '#size' => 5,
+      '#maxlength' => 10,
+      '#description' => 'Your house number',
+      '#attributes' => array(
+        'class' => array(
+          'llr-postcode-lookup-input', 
+          'llr-postcode-lookup-input-house-number'
+         ),
+       ),
+    );
+  }
+
+  $form['postcode'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Postcode'),
+    '#required' => FALSE,
+    '#default_value' => '',
+    '#size' => 15,
+    '#maxlength' => 8,
+    '#description' => t('E.g. WC1R 4TH (inc. space)'),
+    '#attributes' => array(
+      'class' => array(
+        'llr-postcode-lookup-input',
+        'llr-postcode-lookup-input-postcode'
+      ),
+    ),
+  );
+
+  // The link that calls the QAS service (or not, if JS not available)
+  $link = l(t('Lookup address'), 'llr_postcode_lookup/qas/nojs/0/0',
+    array(
+      'attributes' => array(
+        'class' => array('use-ajax', 'find-link'),
+        'id' => array('find-link-' . $config['index']),
+      )
+    )
+  );
+
+  $form['find'] = array(
+    '#markup' => $link,
+    '#prefix' => '<div class="llr-postcode-lookup-find-container">',
+    '#suffix' => '</div>',
+  );
+
+  $form['search_results'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<div class="query-results query-results-' . $config['index'] . '">',
+    '#suffix' => '</div>',
+    '#markup' => '',
+  );
+
+  $form['target_status'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<div class="target-update-status">',
+    '#suffix' => '</div>',
+    '#markup' => '',
+  );
+
+  $form['manual_addr_entry'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Manually enter address'),
+    '#attributes' => array(
+      'class' => array(
+        'llr-postcode-lookup-input',
+        'llr-postcode-lookup-input-manual-entry'
+      ),
+    ),
+  );
+
+  return $form;
+}
+
+/**
+ * Add the query form attachemnts to a form
+ */
+function llr_postcode_lookup_add_query_form_attachments(&$form) {
+  $form['#attached']['js'] = array(
+    drupal_get_path('module', 'llr_postcode_lookup') . '/js/llr_postcode_lookup.js'
+  );
+
+  $form['#attached']['css'] = array(
+    drupal_get_path('module', 'llr_postcode_lookup') . '/assets/llr_postcode_lookup.css'
+  );
+}
+
+/**
+ * Append to Drupal.settings.*
+ */
+function llr_postcode_lookup_add_script_settings($form_id, $config) {
+  // Set values that identify the source and target form #ids that are be used
+  // by script
+  $settings = array(
+    'forms' => array(
+      $form_id => $config,
+    ),
+  );
+
+  drupal_add_js(array('llrPostcodeLookup' => $settings), 'setting');
+}
+
+/**
+ * Return a string that can be used for an HTML element #id value for a form
+ * that is being designated as a lookup form
+ * 
+ * @todo Not ideal as currently $token is just a manually assigned number
+ */
+function llr_postcode_lookup_generate_custom_html_id($token) {
+  return 'llr-postcode-lookup-query-form-' . $token;
+}
+
+/**
+ * Set <form /> attribute values
+ */
+function llr_postcode_lookup_set_form_attributes(&$form, $id) {
+  $form['#attributes']['id'] = $id;
+  $form['#attributes']['class'][] = 'llr-postcode-lookup-query-form';
+}
+
+/**
+ * A 'target' form that is populated by selecting a specific address from search
+ * results.
+ * 
+ * This would be the form that the user would be submitting for whatever reason.
+ */
+function llr_postcode_lookup_user_form($form, &$form_state) {
+
+  $form['#attributes']['class'][] = 'llr-postcode-lookup-test-user-form';
+
+  $form['form_title'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<h2>',
+    '#suffix' => '</h2>',
+    '#markup' => t('Selected address'),
+  );
+
+  $form['form_desc'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => t('Address details that were selected by the user'),
+  );
+
+  for ($i = 1;$i < 6; $i++) {
+    $form['addr' . $i] = array(
+      '#type' => 'textfield',
+      '#title' => t('Address line ' . $i),
+      '#required' => FALSE,
+      '#default_value' => '',
+      '#size' => 40,
+      '#maxlength' => 50,
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Second 'target' form that has field #ids in the same format as the Commerce
+ * Addressfield widget gives to controls (incremental). For example see the
+ * shipping address (portion of the checkout) form.
+ * 
+ * The Addressfield widget adds a suffix (--x - where x is a number) to the form
+ * controls each time the country (and possibly other) control is changed. 
+ * Meaning that if the user alters the country from a default, say UK, to Syria 
+ * and then back to 'UK', the #id values of the controls will have changed. This
+ * is what the $config['target']['dynamic_field_ids'] value is for. It means 
+ * that the script responsible for setting the target form control values can 
+ * take into account the control #id suffixes.
+ * 
+ * @todo Language plays a part in the field #id value. This needs to be taken
+ * into account when setting values. Although this isn't a big deal currenty as
+ *  our site isn't multi-lingual (at the moment).
+ */
+function llr_postcode_lookup_commerce_form($form, &$form_state) {
+  $form['#attributes']['class'][] = 'llr-postcode-lookup-commerce-form';
+
+  $form['form_title'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<h2>',
+    '#suffix' => '</h2>',
+    '#markup' => t('Shipping address'),
+  );
+
+  $form['form_desc'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => t('Drupal Commerce style UK address form'),
+  );
+
+  // * 'Address 1' = edit-customer-profile-shipping-commerce-customer-address-und-0-thoroughfare--3
+  $form['customer-profile-shipping-commerce-customer-address-und-0-thoroughfare--3'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address 1'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // 'Address 2' = edit-customer-profile-shipping-commerce-customer-address-und-0-premise--3
+  $form['customer-profile-shipping-commerce-customer-address-und-0-premise--3'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address 2'),
+    '#required' => FALSE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // * 'State'(how is this county on live? themed?) = edit-customer-profile-shipping-commerce-customer-address-und-0-administrative-area--3
+  $form['customer-profile-shipping-commerce-customer-address-und-0-administrative-area--3'] = array(
+    '#type' => 'textfield',
+    '#title' => t('State (County?)'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // * 'City' = edit-customer-profile-shipping-commerce-customer-address-und-0-locality--3
+  $form['customer-profile-shipping-commerce-customer-address-und-0-locality--3'] = array(
+    '#type' => 'textfield',
+    '#title' => t('City'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // * 'Postal code' = edit-customer-profile-shipping-commerce-customer-address-und-0-postal-code--3
+  $form['customer-profile-shipping-commerce-customer-address-und-0-postal-code--3'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Postal code'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 8,
+  );
+
+  // * 'Country' = edit-customer-profile-shipping-commerce-customer-address-und-0-country--3
+  // We don't need to simulate this as the postcode lookup is only for UK
+  // addresses
+
+  return $form;
+}
+
+/**
+ * Another Drupal commerce-like address form that is 'form altered' so that the
+ * QAS lookup controls are inserted into it, making the source and target forms
+ * one and the same.
+ */
+function llr_postcode_lookup_target_is_src_form($form, &$form_state) {
+  $form['#attributes']['class'][] = 'llr-postcode-lookup-target-is-src-form';
+
+  $form['form_title'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<h2>',
+    '#suffix' => '</h2>',
+    '#markup' => t('Billing address'),
+  );
+
+  $form['form_desc'] = array(
+    '#type' => 'markup',
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+    '#markup' => t('Another Drupal Commerce style UK address form'),
+  );
+
+  // * 'Address 1' = edit-customer-profile-billing-commerce-customer-address-und-0-thoroughfare--6
+  $form['customer-profile-billing-commerce-customer-address-und-0-thoroughfare--6'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address 1'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // 'Address 2' = edit-customer-profile-billing-commerce-customer-address-und-0-premise--6
+  $form['customer-profile-billing-commerce-customer-address-und-0-premise--6'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Address 2'),
+    '#required' => FALSE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // * 'State'(how is this county on live? themed?) = edit-customer-profile-billing-commerce-customer-address-und-0-administrative-area--6
+  $form['customer-profile-billing-commerce-customer-address-und-0-administrative-area--6'] = array(
+    '#type' => 'textfield',
+    '#title' => t('State (County?)'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // * 'City' = edit-customer-profile-billing-commerce-customer-address-und-0-locality--6
+  $form['customer-profile-billing-commerce-customer-address-und-0-locality--6'] = array(
+    '#type' => 'textfield',
+    '#title' => t('City'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 50,
+  );
+
+  // * 'Postal code' = edit-customer-profile-billing-commerce-customer-address-und-0-postal-code--6
+  $form['customer-profile-billing-commerce-customer-address-und-0-postal-code--6'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Postal code'),
+    '#required' => TRUE,
+    '#default_value' => '',
+    '#size' => 40,
+    '#maxlength' => 8,
+  );
+
+  return $form;
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter()
+ * 
+ * Inserts the QAS lookup controls into an existing form. This should serve as a
+ * guide as to how we would integrate this functionality into a Commerce 
+ * checkout form.
+ */
+function llr_postcode_lookup_form_llr_postcode_lookup_target_is_src_form_alter(&$form, &$form_state) {
+  $config = array(
+    'index' => 2,
+    'showHouseNo' => TRUE,
+    'targetIsSrc' => TRUE,
+    'isCommerce' => FALSE, /* is_commerce is FALSE because although the form fields are commerce name like, they're not exactly the same. Also, Commerce adds further fields to the checkout form via 'panes' and as a <fieldset />, */
+    'lookupControlsContainerClass' => '',
+    'input' => array(
+      'houseNo' => 0,
+      'postcode' => 0,
+    ),
+    'target' => array(
+      'id' => 'llr-postcode-lookup-target-is-src-form',
+      'dynamicFieldIds' => TRUE,
+      'formToQasFieldMap' => array(
+        'edit-customer-profile-billing-commerce-customer-address-und-0-thoroughfare' => 'addr_line_1',
+        'edit-customer-profile-billing-commerce-customer-address-und-0-premise' => 'addr_line_2',
+        'edit-customer-profile-billing-commerce-customer-address-und-0-administrative-area' => 'county',
+        'edit-customer-profile-billing-commerce-customer-address-und-0-postal-code' => 'postcode',
+        'edit-customer-profile-billing-commerce-customer-address-und-0-locality' => 'town',
+      ),
+    )
+  );
+
+  // Add the AJAX library as the form will contain an ajax-link ('Find')
+  drupal_add_library('system', 'drupal.ajax');
+
+  // Get hold of the lookup form controls as a normal array (not processed by
+  // any Drupal FAPI functions)
+  $lookup_form_elements = llr_postcode_lookup_raw_query_form_elements($config);
+
+  // Where exactly to insert the lookup form fields will vary for whichever form
+  // is being altered (a todo would be to incorporate #weight)
+  $form = llr_postcode_lookup_merge_lookup_controls($form, $lookup_form_elements, 3);
+
+  // Add script (that makes the whle thing function) and default CSS
+  llr_postcode_lookup_add_query_form_attachments($form);
+
+  // Custom form #id so that we can have more than one lookup form on the page
+  $custom_form_id = llr_postcode_lookup_generate_custom_html_id($config['index']);
+
+  // Set <form /> attribute values (custom @id and @class values )
+  llr_postcode_lookup_set_form_attributes($form, $custom_form_id);
+  
+  // Src and target forms are the same in this instance. We now have the custom 
+  // form/@id value, we can override the $config target form id it gets 
+  // populated correctly in the client-side JS 
+  $config['target']['id'] = $custom_form_id;
+
+  // Populate Drupal.settings.*
+  llr_postcode_lookup_add_script_settings($custom_form_id, $config);
+}
+
+/**
+ * Insert associate array into another at a specified position, preserving keys
+ */
+function llr_postcode_lookup_merge_lookup_controls($existing, $to_insert, $offset) {
+  return array_slice($existing, 0, $offset, TRUE) + 
+    $to_insert + array_slice($existing, $offset, NULL, TRUE);
+}
+
+/**
+ * Query the QAS service.
+ * 
+ * @param int $house_no
+ *   Optional house number to use as part of QAS request
+ * 
+ * @param string $postcode
+ *   A valid BS6777 UK postcode to use in QAS request
+ * 
+ * @return
+ *   QAS search results as JSON data
+ */
+function llr_postcode_lookup_query_qas($house_no = 0, $postcode = '') {
+  // @todo Make this a parameter
+  $qas_params = llr_postcode_lookup_qas_parameters('external');
+  $qacapture = new QASCapture($qas_params);
+
+  if($house_no == 0) {
+    $house_no = '';
+  }
+
+  $result = $qacapture->Search(
+    "$house_no, $postcode", /* search params */
+    'GBR',                  /* country id */
+    'Singleline',           /* engine */
+    TRUE,                   /* flatten */
+    'CLOSE',                /* intensity */
+    'Default',              /* promptset */
+    100,                     /* threshold */
+    5000,                   /* timeout */
+    '',                     /* layout */
+    TRUE,                   /* formatted address in picklist */
+    llr_postcode_lookup_gen_uuid(), /* request tag */
+    ''                      /* localisation */
+  );
+
+  $output = array();
+  $output['items'] = array();
+
+  foreach($result->Picklist->Items as $item) {
+    $pli = (array) $item;
+
+    $json_data = array(
+      'postcode' => $pli['Postcode'],
+      'moniker' => $pli['Moniker'],
+      'partialAddress' => $pli['PartialAddress'],
+      'isFullAddress' => $pli['IsFullAddress'],
+      'isInformation' => $pli['IsInformation'],
+      'score' => $pli['Score'],
+      'text' => $pli['Text'],
+    );
+
+    $output['items'][] = $json_data;
+  }
+
+  drupal_json_output(json_encode($output));
+}
+
+/**
+ * Use a previously retrieved address moniker to get a structured version of an 
+ * address
+ * 
+ * The moniker to use is HTTP POSTed via an AJAX request
+ * 
+ * @return
+ *   Structured address as JSON data
+ */
+function llr_postcode_lookup_query_qas_by_moniker() {
+  // @todo Make this a parameter
+  $qas_params = llr_postcode_lookup_qas_parameters('external');
+  $qacapture = new QASCapture($qas_params);
+
+  $qas_address = $qacapture->GetAddress(
+    $_POST['moniker'], /* moniker QAS responsibility to sanitise incoming data */
+    '',                /* layout */
+    llr_postcode_lookup_gen_uuid(), /* request tag */
+    ''                 /* localisation */
+  );
+
+  $address = array();
+  $address_lines = $qas_address->AddressLines;
+
+  for ($i = 0; $i < count($address_lines); $i++) {
+    if (empty($address_lines[$i]->Label)) {
+      $address['addr_line_' . ($i + 1)] = $address_lines[$i]->Line;
+    }
+    else {
+      $address[strtolower($address_lines[$i]->Label)] = $address_lines[$i]->Line;
+    }
+  }
+
+  drupal_json_output(json_encode($address));
+}
+
+/**
+ * Redirect to where the 'Find' link was clicked with a warning, or the homepage
+ * 
+ * @todo For a particular form, be able to set the default redirect page, not
+ * just the homepage
+ */
+function llr_postcode_lookup_redirect_for_no_js() {
+  drupal_set_message(t('Javascript is required to use this service'), 'warning');
+
+  // See http://drupal.org/node/224333#referer_uri
+  if (!empty($_SERVER['HTTP_REFERER'])) {
+    drupal_goto($_SERVER['HTTP_REFERER']);
+  }
+  else {
+    drupal_goto();
+  }
+}
+
+/**
+ * Generate a UUID. Unsure how perfect this is, but it's better than just rand()
+ * or similar. See:
+ * 
+ * http://www.php.net/manual/en/function.uniqid.php#94959
+ * 
+ * @return
+ *   A UUID
+ */
+function llr_postcode_lookup_gen_uuid() {
+  return sprintf( '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+    // 32 bits for "time_low"
+    mt_rand( 0, 0xffff ), mt_rand( 0, 0xffff ),
+
+    // 16 bits for "time_mid"
+    mt_rand( 0, 0xffff ),
+
+    // 16 bits for "time_hi_and_version",
+    // four most significant bits holds version number 4
+    mt_rand( 0, 0x0fff ) | 0x4000,
+
+    // 16 bits, 8 bits for "clk_seq_hi_res",
+    // 8 bits for "clk_seq_low",
+    // two most significant bits holds zero and one for variant DCE1.1
+    mt_rand( 0, 0x3fff ) | 0x8000,
+
+    // 48 bits for "node"
+    mt_rand( 0, 0xffff ), mt_rand( 0, 0xffff ), mt_rand( 0, 0xffff )
+  );
+}
+
+/**
+ * Return paramters used with the QAS web service
+ * 
+ * This is a customisation to the QAS integration code so that we can include
+ * the library in more than one module. It's necessary to do this as we need to 
+ * use different username/password details in different scenarios. The default
+ * code define()s these values so causes errors as more than one instance of the
+ * library will then have constants define more than once.
+ * 
+ * Also adding these values from within Drupal opens up the possiblity for our 
+ * module to make the values available to be configured by the Drupal UI.
+ * 
+ * These values were orignally defined in 'constants.inc'.
+ */
+function llr_postcode_lookup_qas_parameters($account_type = 'external') {
+  $params = array();
+
+  switch ($account_type) {
+    case 'external':
+      $params['username'] = 'e220d980-d4d';
+      $params['password'] = 'biscuitbase1';
+      break;
+
+    case 'internal':
+      $params['username'] = '7aab7efc-f66';
+      $params['password'] = 'biscuitbase1';
+      break;
+
+    default:
+      $params['username'] = '';
+      $params['password'] = '';
+  }
+
+  return $params;
+}
+
+/**
+ * Implements hook_commerce_checkout_pane_info()
+ *
+ * Define a UK address lookup pane for the Commerce 'Delivery address' page
+ */
+/*
+function llr_postcode_lookup_commerce_checkout_pane_info() {
+  $panes = array();
+
+  $panes['commerce_delivery_address_lookup'] = array(
+    'title' => '',
+    'pane_id' => 'uk_delivery_address_lookup',
+    'name' => 'UK Delivery address postcode lookup',
+    'collapsible' => FALSE,
+    'collapsed' => FALSE,
+    'weight' => 0,
+    'enabled' => FALSE,
+    'review' => FALSE,
+    'base' => 'llr_postcode_lookup_delivery_address_pane',
+  );
+
+  return $panes;
+}
+*/
+
+/**
+ * Define contents of additional 'Delivery address' pane
+ * 
+ * Although we can automatically add the pane to the page, seeing as the page
+ * is custom itself, we leave it to be a manual configuration step to add the 
+ * pane to the page. It should be listed under 'Disabled' by default.
+ * 
+ * Also, Note that the content gets added as a <fieldset /> and the script 
+ * recognises this and accounts for it
+ */
+/*
+function llr_postcode_lookup_delivery_address_pane_checkout_form($form, &$form_state, $checkout_pane, $order) {
+  $config = array(
+    'index' => 0,
+    'showHouseNo' => FALSE,
+    'targetIsSrc' => TRUE,
+    'isCommerce' => TRUE,
+    'lookupControlsContainerClass' => '',
+    'input' => array(
+      'houseNo' => 0,
+      'postcode' => 0,
+    ),
+    'target' => array(
+      'id' => 'commerce-checkout-form-delivery-address',
+      'dynamicFieldIds' => TRUE,
+      'formToQasFieldMap' => array(
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-thoroughfare' => 'addr_line_1',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-premise' => 'addr_line_2',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-administrative-area' => 'county',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-postal-code' => 'postcode',
+        'edit-customer-profile-shipping-commerce-customer-address-und-0-locality' => 'town',
+      ),
+    )
+  );
+
+  // Alter the form, adding in controls and scripting required for the
+  // UK postcode lookup functionality to work. See test forms for documentation
+  drupal_add_library('system', 'drupal.ajax');
+
+  $lookup_form_elements = llr_postcode_lookup_raw_query_form_elements($config);
+  llr_postcode_lookup_add_query_form_attachments($lookup_form_elements);
+
+  $custom_form_id = llr_postcode_lookup_generate_custom_html_id($config['index']);
+
+  llr_postcode_lookup_set_form_attributes($lookup_form_elements, $custom_form_id);
+
+  $config['target']['id'] = $custom_form_id;
+  llr_postcode_lookup_add_script_settings($custom_form_id, $config);
+
+  return $lookup_form_elements;
+}
+*/
+
+// The validate and submit functions for the new delivery address pane aren't 
+// required as we're only using the pane contents as a base for scripting, none
+// of the information entered is required as part of the order
+// 
+// function llr_postcode_lookup_delivery_address_lookup_pane_checkout_validate($form, &$form_state, $checkout_pane, $order) {
+// }
+
+// function llr_postcode_lookup_delivery_address_lookup_pane_checkout_submit($form, &$form_state, $checkout_pane, $order) {
+// }
+
+/**
+ * Implements hook_field_widget_WIDGET_TYPE_form_alter()
+ * 
+ * Add the LLR postcode lookup controls to the standard addressfield widget, 
+ * on (a) certain form(s)
+ */
+function llr_postcode_lookup_field_widget_addressfield_standard_form_alter(&$element, &$form_state, $context) {
+  if ($form_state['build_info']['form_id'] == 'commerce_checkout_form_delivery_address') {
+    $config = array(
+      'index' => 0,
+      'showHouseNo' => FALSE,
+      'targetIsSrc' => TRUE,
+      'isCommerce' => TRUE,
+      'lookupControlsContainerClass' => 'llr-postcode-lookup-container',
+      'input' => array(
+        'houseNo' => 0,
+        'postcode' => 0,
+      ),
+      'target' => array(
+        'id' => 'commerce-checkout-form-delivery-address',
+        'dynamicFieldIds' => TRUE,
+        'formToQasFieldMap' => array(
+          'edit-customer-profile-shipping-commerce-customer-address-und-0-thoroughfare' => 'addr_line_1',
+          'edit-customer-profile-shipping-commerce-customer-address-und-0-premise' => 'addr_line_2',
+          'edit-customer-profile-shipping-commerce-customer-address-und-0-administrative-area' => 'county',
+          'edit-customer-profile-shipping-commerce-customer-address-und-0-postal-code' => 'postcode',
+          'edit-customer-profile-shipping-commerce-customer-address-und-0-locality' => 'town',
+        ),
+      )
+    );
+
+    drupal_add_library('system', 'drupal.ajax');
+
+    // Container element
+    $extra_elements = array();
+
+    $extra_elements['llr_postcode_lookup_block'] = array(
+      '#type' => 'fieldset',
+      '#weight' => -5,
+      '#collapsible' => FALSE,
+      '#collapsed' => FALSE,
+    );
+
+    // Add CSS/JS
+    llr_postcode_lookup_add_query_form_attachments($extra_elements);
+
+    // Add fieldset children elements
+    $children = llr_postcode_lookup_raw_query_form_elements($config);
+    $extra_elements['llr_postcode_lookup_block']['postcode'] = $children['postcode'];
+    $extra_elements['llr_postcode_lookup_block']['find'] = $children['find'];
+    $extra_elements['llr_postcode_lookup_block']['search_results'] = $children['search_results'];
+    $extra_elements['llr_postcode_lookup_block']['target_status'] = $children['target_status'];
+    $extra_elements['llr_postcode_lookup_block']['manual_addr_entry'] = $children['manual_addr_entry'];
+
+    // Set some attributes on the container element
+    $custom_form_id = llr_postcode_lookup_generate_custom_html_id($config['index']);
+    llr_postcode_lookup_set_form_attributes($extra_elements, $custom_form_id);
+
+    $extra_elements['llr_postcode_lookup_block']['#attached'] = $extra_elements['#attached'];
+    $extra_elements['#attributes']['class'][] = 'llr-postcode-lookup-container';
+    $extra_elements['llr_postcode_lookup_block']['#attributes'] = $extra_elements['#attributes'];
+
+    // Push values throught to Drupal.settings
+    $config['target']['id'] = $custom_form_id;
+    llr_postcode_lookup_add_script_settings($custom_form_id, $config);
+
+    // Add the extra elements to the widget
+    $element['llr_postcode_lookup_block'] = $extra_elements['llr_postcode_lookup_block'];
+  }
+}
