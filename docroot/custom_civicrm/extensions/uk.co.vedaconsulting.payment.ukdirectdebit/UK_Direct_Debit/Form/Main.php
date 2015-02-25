@@ -129,7 +129,6 @@ class UK_Direct_Debit_Form_Main extends CRM_Core_Form
 
     $domain = CRM_Core_BAO_Domain::getDomain();
     $domainLoc = $domain->getLocationValues();
-kpr($domainLoc);
     $companyAddress['company_name'] = $domain->name;
     if (!empty($domainLoc['address'])) {
       $companyAddress['address1']     = $domainLoc['address'][1]['street_address'];
