@@ -133,7 +133,7 @@ class UK_Direct_Debit_Form_Main extends CRM_Core_Form
     if (!empty($domainLoc['address'])) {
       $companyAddress['address1']     = $domainLoc['address'][1]['street_address'];
       $companyAddress['address2']     = $domainLoc['address'][1]['supplemental_address_1'];
-      $companyAddress['address3']     = $domainLoc['address'][1]['supplemental_address_2'];
+//      $companyAddress['address3']     = $domainLoc['address'][1]['supplemental_address_2'];
       $companyAddress['town']         = $domainLoc['address'][1]['city'];
       $companyAddress['postcode']     = $domainLoc['address'][1]['postal_code'];
       $companyAddress['county']       = CRM_Core_PseudoConstant::county($domainLoc['address'][1]['state_province_id']);
@@ -211,7 +211,7 @@ class UK_Direct_Debit_Form_Main extends CRM_Core_Form
    */
   function setDirectDebitFields( &$form ) {
 
- //   CRM_Core_Payment_Form::_setPaymentFields($form);
+//    CRM_Core_Payment_Form::_setPaymentFields($form);
 
     $form->_paymentFields['account_holder'] = array(
                                                      'htmlType'    => 'text',

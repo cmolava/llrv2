@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<menu>
+  <item>
+    <path>civicrm/admin/setting/track_mailing</path>
+    <page_callback>CRM_Admin_Form_Setting_TrackingMailingSettingsForm</page_callback>
+    <title>Tracking Mailing Settings</title>
+    <access_arguments>administer CiviCRM</access_arguments>
+  </item>
+</menu>

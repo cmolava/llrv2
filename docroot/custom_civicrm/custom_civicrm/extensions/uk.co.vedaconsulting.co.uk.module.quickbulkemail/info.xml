@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<extension key="uk.org.leukaemialymphomaresearch.org.module.quickbulkemail" type="module">
+  <file>quickbulkemail</file>
+  <name>Quick Bulk Email</name>
+  <description>Quick Bulk Email extension to allow a user to send a bulk email with the minimal number of steps. All emails sent via this route will work in exactly the same fashion as normal bulk emails i.e. activities created, mailing reports should display them and mailing statistics should work in the same way. This extension just simplifies the email sending process.</description>
+  <license>AGPL</license>
+  <maintainer>
+    <author>Ghost</author>
+    <email>ghost@vedaconsulting.co.uk</email>
+  </maintainer>
+  <releaseDate>2013-08-21</releaseDate>
+  <version>1.0</version>
+  <develStage>alpha</develStage>
+  <compatibility>
+    <ver>4.2</ver>
+  </compatibility>
+  <comments>This is a very early release and is still under active development.</comments>
+  <civix>
+    <namespace>CRM/Quickbulkemail</namespace>
+  </civix>
+</extension>

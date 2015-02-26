@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<extension key="org.civicoop.emailapi" type="module">
+  <file>emailapi</file>
+  <name>E-mail API</name>
+  <description>API to send an e-mail to a contact</description>
+  <license>AGPL-3.0</license>
+  <maintainer>
+    <author>Jaap Jansma - CiviCooP</author>
+    <email>helpdesk@civicoop.org</email>
+  </maintainer>
+  <urls>
+    <url desc="Main Extension Page">https://guthub.com/CiviCooP/org.civicoop.emailapi</url>
+    <url desc="documentation">https://guthub.com/CiviCooP/org.civicoop.emailapi/README.md</url>
+    <url desc="Support">http://civicoop.org</url>
+    <url desc="Licensing">http://www.gnu.org/licenses/agpl-3.0.html</url>
+  </urls>
+  <releaseDate>2015-02-05</releaseDate>
+  <version>1.4</version>
+  <develStage>stable</develStage>
+  <compatibility>
+    <ver>4.3</ver>
+    <ver>4.4</ver>
+    <ver>4.5</ver>
+  </compatibility>
+  <comments>
+    Original developed by http://civicoop.org. Contributed by http://www.ixiam.com
+  </comments>
+  <civix>
+    <namespace>CRM/Emailapi</namespace>
+  </civix>
+<downloadUrl>https://github.com/CiviCooP/org.civicoop.emailapi/archive/v1.4.zip</downloadUrl></extension>

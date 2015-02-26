@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<extension key="uk.co.vedaconsulting.contributionrunningtotal" type="module">
+  <file>selectedcontributionamountcount</file>
+  <name>Contribution Floating Count Total</name>
+  <description>Extension for displaying counter of contributions selected</description>
+  <license>AGPL-3.0</license>
+  <maintainer>
+    <author>Veda Consulting</author>
+    <email>support@vedaconsulting.co.uk</email>
+  </maintainer>
+  <releaseDate>2015-01-06</releaseDate>
+  <version>2.2</version>
+  <develStage>stable</develStage>
+  <compatibility>
+    <ver>4.5</ver>
+  </compatibility>
+  <comments></comments>
+  <civix>
+    <namespace>CRM/Selectedcontributionamountcount</namespace>
+  </civix>
+  <urls>
+    <url desc="Documentation">https://github.com/veda-consulting/uk.co.vedaconsulting.contributionrunningtotal/blob/master/README.md</url>
+  </urls>
+</extension>

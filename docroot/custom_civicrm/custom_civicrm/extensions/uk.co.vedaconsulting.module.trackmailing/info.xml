@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<extension key="uk.co.vedaconsulting.module.trackmailing" type="module">
+  <file>trackmailing</file>
+  <name>Track Mailing</name>
+  <description>Track mailing job using schedule reminder</description>
+ <license></license>
+  <maintainer>
+    <author>parvez</author>
+    <email>parvez@vedaconsulting.co.uk</email>
+  </maintainer>
+  <releaseDate>2013-08-07</releaseDate>
+  <version>1.0</version>
+  <develStage>alpha</develStage>
+  <compatibility>
+    <ver>4.2</ver>
+  </compatibility>
+  <comments>This is a new, undeveloped module</comments>
+  <civix>
+    <namespace>CRM/Trackmailing</namespace>
+  </civix>
+</extension>
