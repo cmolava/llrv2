@@ -133,20 +133,23 @@ if ( typeof cj === 'function' ) {
        nudge = settings['nudge'] || null,
        nudgeForm = '',
        nudgeBox= null;
-       
     if ( donationWebForm.length && nudge ) {
       initNudge();
     }
 
     function initNudge() {
-      amountInput = $('input#edit-submitted-civicrm-1-contribution-1-contribution-total-amount').change( function(e) {
+      amountInput = $('input#edit-submitted-civicrm-1-contribution-1-contribution-total-amount');
+      if ( ! amountInput.length || ! amountInput.val() ) {
+        return;
+      }
+      amountInput.change( function(e) {
         //Replace title and header whenever donation amount changes
         var header = $('h1.title'),
           newTitle = header.text().replace(/£[0-9.]+/,'£' + $(this).val());  
         header.text(newTitle);
         $('head title').text(newTitle);  
       });//change
-      
+        
       //Validate nudge values 
       if ( parseFloat(amountInput.val()) + parseFloat(nudge.shortfall) != parseFloat(nudge.target_value) ) {
         nudge.shortfall = parseFloat(nudge.target_value) - parseFloat(amountInput.val());
