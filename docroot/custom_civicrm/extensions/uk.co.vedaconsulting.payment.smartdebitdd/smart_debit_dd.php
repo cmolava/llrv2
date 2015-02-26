@@ -558,11 +558,12 @@ class uk_co_vedaconsulting_payment_smartdebitdd extends CRM_Core_Payment {
 
     $form->addFormRule( array( 'uk_co_vedaconsulting_payment_smartdebitdd', 'validatePayment' ), $form );
     if (self::getCRMVersion() >= 4.2) {
-        CRM_Core_Region::instance('billing-block')->update( 'default', array( 'disabled' => TRUE ) );
-        CRM_Core_Region::instance('billing-block')->add( array( 'template' => 'CRM/Core/MyPayPalBlock.tpl',
-                                                                'weight'   => -1
-                                                               )
-                                                       );
+      //CM:Template doesn't exist, temp fix to avoid smarty error
+     //   CRM_Core_Region::instance('billing-block')->update( 'default', array( 'disabled' => TRUE ) );
+     //   CRM_Core_Region::instance('billing-block')->add( array( 'template' => 'CRM/Core/MyPayPalBlock.tpl',
+                                                                //'weight'   => -1
+                                                               //)
+                                                     //);
     }
   }
 
