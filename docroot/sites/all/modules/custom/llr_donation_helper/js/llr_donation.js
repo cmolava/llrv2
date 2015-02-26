@@ -31,7 +31,6 @@ if ( typeof cj === 'function' ) {
              if ( ! billingVals.hasOwnProperty(key) ) {
                continue;
              }
-
              if ( ! input.length ) {
                showAddress = true;
                continue;
@@ -39,7 +38,14 @@ if ( typeof cj === 'function' ) {
              input.val(billingVals[key]);
            }
            //We hide billing address after we are sure it is populated
-           addr.toggle(showAddress);
+           var addrSection = addr.children('div.billing_name_address-section');
+           addrSection.toggle(showAddress);
+           //Allow billing address to be changed
+           addr.children('legend').text('Change Billing Name and Address').click(function() {
+              showAddress = ! showAddress;
+              addrSection.toggle(showAddress);
+               }
+           );
            //Always hide the billing items table
            $('#wf-crm-billing-items').hide();
          });//end bind(crmFormLoad..
@@ -75,7 +81,7 @@ if ( typeof cj === 'function' ) {
       }
     }
     //Inially hide address fields
-    $addrFields.hide();
+   // $addrFields.hide();
 
     //Show address fields to enter address manually,
     $pclManual.change(function() { 

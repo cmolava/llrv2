@@ -51,9 +51,21 @@ form.webform-donate-monthly table#wf-crm-billing-items {
   /** making this display:none prevents the payment form from displaying
    * so use visibility : hidden instead.
    */
-  visibility :hidden; 
+  visibility :hidden;
 }
 form.webform-donate-single #payment_information fieldset.billing_name_address-group,
 form.webform-donate-monthly #payment_information fieldset.billing_name_address-group {
-/*  display : none; */
+/**  display : none; **/
+}
+form.webform-donate .name-row {
+  display: inline-block;
+}
+
+form.webform-donate .billing_name_address-group legend:hover {
+  cursor : pointer;
+}
+form.webform-donate .billing_name_address-group legend {
+  font-weight: normal;
+  font-size: .8em;
+  color : #b00; 
 }

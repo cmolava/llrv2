@@ -194,6 +194,7 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
   } 
 
   $form['#attributes']['class'][] = str_replace('_', '-', $name);
+  $form['#attributes']['class'][] = 'webform-donate';
   $form['#attached']['js'][] = $path . '/js/llr_donation.js';
   $form['#attached']['css'][] = $path . '/css/llr_donation.css';
 }
@@ -248,7 +249,6 @@ function llr_donation_billing_address_field_values( &$form_state) {
     'billing_state_province_id-5' => 'address_state_province_id',
     'billing_postal_code-5' => 'address_postal_code',
   );
-
   foreach ( $billing_to_contact_map as $b_field => $c_field ) {
     $cid = $contact_elements[$from_prefix . $c_field]['#webform_component']['cid'];
     $billing_data[$b_field] = $values[$cid];
