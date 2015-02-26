@@ -35,7 +35,9 @@ function llr_donation_helper_menu() {
 function llr_donation_helper_preprocess_page(&$variables) {
   if ( llr_donation_is_a_donation_page() ) {
 ////    $variables['theme_hook_suggestion'] = 'page__bare';
+    $variables['is_donation_page'] = TRUE;
   }
+
 }
 
 /**
@@ -103,6 +105,7 @@ function llr_donation_helper_civicrm_BuildForm(&$formName, &$form) {
  * Implements hook_form_alter()
  */
 function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
+  //Only deal with webform forms
   $is_webform =  0 === strpos($form_id, 'webform_client_form');
   if ( ! $is_webform ||  empty($form['#node']) || empty($form['#node']->llr_webform['name'])) {
     return;
@@ -110,16 +113,23 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
   $name = $form['#node']->llr_webform['name'];
   $path = drupal_get_path('module', 'llr_donation_helper');
   
-  //Is it a donate form?
+  //Only deal with donate forms
   if  (! in_array($name, array('webform_donate_monthly', 'webform_donate_single')) ) {
     return;
   }
-
-  //Values from donate start form
+  //Is Webform node  displayed in full view?
+  $page_obj = menu_get_object();
+    if ( empty($page_obj->nid) || $page_obj->nid != $form['#node']->nid ) {  
+      //Webform is displayed as block or in summary view. 
+      //All we can do here is hide the form
+      $form['#access'] = FALSE;
+      return;
+  }
+  //Do we have donation amount  from the start form?
   $prev_values = llr_webform_retrieve_values($name);
   if ( empty( $prev_values['donate_amount']) ) {
-    //No donation amount, go to start
-    drupal_goto('donate/start');
+      drupal_goto('donate/start');
+      return;
   }
   
   //Add submission handler
