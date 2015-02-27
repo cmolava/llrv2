@@ -81,7 +81,7 @@ if ( typeof cj === 'function' ) {
       }
     }
     //Inially hide address fields
-   // $addrFields.hide();
+    $addrFields.hide();
 
     //Show address fields to enter address manually,
     $pclManual.change(function() { 
