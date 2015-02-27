@@ -5,7 +5,7 @@
 if ( typeof cj === 'function' ) {
   cj(function($) {
     var donateWebForm = $('form.webform-donate-single,form.webform-donate-monthly'),
-      settings = Drupal.settings.LLRDonate | {},
+      settings = Drupal.settings.LLRDonate || {},
       amountFieldProcessed = 0;
     if ( donateWebForm.length ) {
       //If donation amount field is not populated, show it.
