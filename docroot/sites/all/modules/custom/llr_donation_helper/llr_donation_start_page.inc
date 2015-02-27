@@ -40,6 +40,7 @@ function llr_donation_donate_start_form($form_state) {
       'js' => array($path . '/js/llr_donation.js'),
       'css' => array($path . '/css/llr_donation.css'),
     ),
+    '#attributes' => array('class' => array('donate-start')),
     'donate_options' => array(
       '#title' => t('Donate options'),
       '#type' => 'radios',
