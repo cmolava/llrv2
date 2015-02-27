@@ -101,9 +101,9 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
       $creditCardType = $params['credit_card_type'];
     }
     // Set email
-    if ($params['email-Primary']) {
+    if (! empty($params['email-Primary']) ) {
       $useremail = $params['email-Primary'];
-    } if ($params['email-5']) {
+    } if (! empty($params['email-5']) ) {
       $useremail = $params['email-5'];
     } else {
       $useremail = $params['email'];
