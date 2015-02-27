@@ -82,7 +82,8 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
    *
    */
   function doDirectPayment(&$params) {
-
+    CRM_Core_Error::backtrace();
+  //  CRM_Core_Error::debug_log_message();
    $params['credit_card_type'] = strtoupper( $params['credit_card_type'] );
     // Card Types accepted by SagePay (Ver 2.23): VISA, MC, DELTA, MAESTRO, UKE, AMEX, DC, JCB, LASER, PAYPAL
     switch ($params['credit_card_type'] )
@@ -99,7 +100,6 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     default:
       $creditCardType = $params['credit_card_type'];
     }
-
     // Set email
     if ($params['email-Primary']) {
       $useremail = $params['email-Primary'];
@@ -110,7 +110,13 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     }
   
     $donateAmount = str_replace(',', '', $params['amount']);
-  
+    //Convert country id values to iso values if they have not been provided
+    $country_keys = array('billing_country-5' => 'billing_country_id-5', 'country' => 'country_id');
+    foreach ( $country_keys as  $isokey => $idkey ) {
+      if (empty($params[$isokey]) && ! empty($params[$idkey]) ) {
+        $params[$isokey] = $this->getCountryISO($params[$idkey]);
+      }
+    }
     // Construct params list to send to SagePay ...
     $sageParams = array(
       'Vendor'             => $this->_paymentProcessor['user_name'],
@@ -155,7 +161,6 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
        $sageParams['BillingState'] = $params['billing_state_province-5'];
     $sageParams['DeliveryState'] = $params['billing_state_province-5'];
     }
-
     // Construct post string
     $post = '';
     foreach ($sageParams as $key => $value)
@@ -288,6 +293,21 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     // Create the contribution. We don't need to do anything with it, but it's here for inspection if required.
     $contribution = civicrm_api('Contribution', 'Create', $contribution_values);
   
+  }
+
+  /**
+   * Helper method, gets country iso code from id
+   */
+  private function getCountryISO($country_id) {
+    static $countries = array();
+    if ( !empty( $country_id && ! isset($countries[$country_id])) ) {
+        $sql    = "SELECT iso_code FROM civicrm_country WHERE id = %1";
+        $params = array( 1 => array( $country_id , 'Integer' ) );
+        $dao    = CRM_Core_DAO::executeQuery( $sql, $params );
+        $dao->fetch();
+        $countries[$country_id] = $dao->iso_code;
+    }
+    return $countries[$country_id]; 
   }
 
 
