@@ -3,8 +3,10 @@
 }
 
 /**
- * Sample  css
+ * Demonstration css for donate
  */
+
+/** backgrounds change on mouse events for amounts **/
 body.donate-amount-5 #main-wrapper {
   background-color: #eff;
 }
@@ -17,13 +19,16 @@ body.donate-amount-20 #main-wrapper {
   background-color: #ffe;
 }
 
+/**
+ * Select blocks behave like radio buttons but are divs with content.
+ */
 div.select-block {
- width: 27%;
+ width: 30%;
  height: 50px;
  border: #ccc 1px solid;
  display : block;
  float : left;
- margin : 5px;
+ margin : 10px;
  overflow : hidden;
  padding: 0;
 }
@@ -45,22 +50,73 @@ div.select-block label {
   width : 100%;
   margin: 0;
 }
+/** end select-block **/
 
-form.webform-donate-single table#wf-crm-billing-items,
-form.webform-donate-monthly table#wf-crm-billing-items {
+
+form.webform-donate table#wf-crm-billing-items {
   /** making this display:none prevents the payment form from displaying
    * so use visibility : hidden instead.
    */
   visibility :hidden;
 }
-form.webform-donate-single #payment_information fieldset.billing_name_address-group,
-form.webform-donate-monthly #payment_information fieldset.billing_name_address-group {
-/**  display : none; **/
+form.webform-donate fieldset {
+  border: none;
 }
-form.webform-donate .name-row {
+form.webform-donate fieldset legend {
+  background-color: transparent;
+  border: 0;
+  text-shadow: 0;
+  font-size: 1.5em;
+  padding-bottom: 1em;
+}
+/**
+ * Chunky submit button
+ */
+form.webform-donate input.form-submit,
+form.donate-start input#edit-submit {
+  border-radius : 0;
+  width: 100%;
+  padding: 20px 0;
+  margin: 10px 0;
+  background: #bbb  url();
+  font-size: 1.5em;
+  color: #fff;
+}
+/**
+ * .inline class is set in donate form webform config as component
+ * wrapper class
+ */
+form.webform-donate .inline,
+form.donate-start #edit-donate-options .form-item
+{
   display: inline-block;
+  padding-right: 10px;
 }
 
+.form-item-submitted-civicrm-1-contact-1-fieldset-fieldset-postcode,
+.llr-postcode-lookup-find-container {
+  display :inline-block;
+  padding-right: 10px;
+}
+
+.llr-postcode-lookup-find-container a {
+  color: #fff;
+}
+.llr-postcode-lookup-find-container {
+  padding-left: 10px;
+  margin-top: 0;
+  background-color: #ccc;
+  color: #fff;
+}
+.postcode-lookup-input {
+  width: auto;
+}
+
+/**
+ *
+/**
+ * Let the legend for billing name address fieldset act as show/hide link
+ */
 form.webform-donate .billing_name_address-group legend:hover {
   cursor : pointer;
 }
@@ -69,3 +125,4 @@ form.webform-donate .billing_name_address-group legend {
   font-size: .8em;
   color : #b00; 
 }
+

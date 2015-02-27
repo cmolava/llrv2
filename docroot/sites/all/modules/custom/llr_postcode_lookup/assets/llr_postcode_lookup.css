@@ -28,7 +28,6 @@
 .llr-postcode-lookup-input,
 input.llr-postcode-lookup-input-house-number,
 input.llr-postcode-lookup-input-postcode {
-  width: 25em !important;
 }
 
 /* Container for and link to trigger the search */
