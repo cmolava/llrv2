@@ -172,12 +172,10 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     foreach ($sageParams as $key => $value)
     $post .= ($key != 'Vendor' ? '&' : '') . $key . '=' . urlencode($value);
   
-watchdog('llr_debug', 'params for payment : <pre>%p</pre><h4>orig</h4> <pre>%po</pre>', array('%p' =>  print_r($sageParams, true), '%po' => print_r($params, true)));
     // Send payment POST to the target URL
     $url      = $this->_paymentProcessor['url_site'];
     $response = requestPost($url, $post);
 
-watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response, true)));
     // Workarounds for special cases
     if ($response["Status"] != 'OK') {
       if ( preg_match('/VendorTxCode has been used/i', $response["StatusDetail"]) ) {
@@ -196,6 +194,7 @@ watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response,
   if ($_SESSION['contribution_attempt']) { 
     unset($_SESSION['contribution_attempt']);
   }
+    
     // Take action based upon the response status
   switch ($response["Status"]) {
           case 'OK':
@@ -212,7 +211,32 @@ watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response,
   }
 
   }
+  
+  /**
+   * Creates an error for a failed transaction.
+   */
+  private function createError($msg, $response) {
+    //The civicrm api/v3/Contribution.php expects an array on error
+    //(it uses is_error()
+    //Whereas Contribute/Form/Contribution.php (as of v 4.5) expects an object of type CRM_Core_Error.
+    //We will try to account for both callers.
 
+    //Note: in  v4.6,  there are further changes - doPayment called rather than
+    //doDirectPayment and  an exception is expected caught. 
+    
+    //Drupal-specific and horrid even within Drupal, but do not know any
+    //better way of determining whether caller is api or not.
+    $path = $_GET['q'];
+    //A heavy assumption, if we are not on a civicrm page, we have been
+    //called by civicrm_api.
+    if ( 0 === strpos($path, 'civicrm/') && 0 !== strpos($path, 'civicrm/api') ) {
+      $error = CRM_Core_Error::createError($msg, $response['Status'], 'Error');
+        return $error; 
+    }
+    else {
+      return array('error_message' => $msg, 'is_error' => 1);
+    }
+  }
 
   /**
    * SagePay payment has succeeded
@@ -231,9 +255,10 @@ watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response,
    */
   private function invalid($response, $params) {
     $msg = "Unfortunately, it seems the details provided are invalid – please double check your billing address and card details and try again.";  
-    drupal_set_message($msg,'error');
+    //drupal_set_message($msg,'error');
     self::createFailedContribution($response, $params);
-    return CRM_Core_Error::createAPIError( $msg, $response );
+    return $this->createError($msg, $response);
+    //return CRM_Core_Error::createAPIError( $msg);
   }
 
   /**
@@ -244,11 +269,12 @@ watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response,
    */
   private function error($response, $params) {
     $msg = "Unfortunately, it seems there was a problem with your credit card details – please double check your billing address and card details and try again";
-    drupal_set_message($msg, 'error');
+  //  drupal_set_message($msg, 'error');
     watchdog('SagePay', $response["StatusDetail"], $response, WATCHDOG_ERROR);
     self::createFailedContribution($response, $params);
-    return CRM_Core_Error::createAPIError($msg, $response);
+    return $this->createError($msg, $response);
   }
+  
   /**
    * SagePay payment has failed
    * @param $response
@@ -256,10 +282,9 @@ watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response,
    * @return array
    */
   private function rejected($response, $params) {
-    $msg = "Unfortunately, it seems the authorisation was a rejected – please double check your billing address and card details and try again.";
-    drupal_set_message($msg, 'error');
+    $msg = "Unfortunately, it seems the authorisation was  rejected – please double check your billing address and card details and try again.";
     self::createFailedContribution($response, $params);
-    return CRM_Core_Error::createAPIError($msg, $response);
+    return $this->createError($msg, $response);
   }
   /**
    * Create a contribution record for CC transactions that fail.
