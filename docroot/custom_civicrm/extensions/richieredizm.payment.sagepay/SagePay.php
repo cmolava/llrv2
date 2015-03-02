@@ -82,7 +82,6 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
    *
    */
   function doDirectPayment(&$params) {
-    CRM_Core_Error::backtrace();
   //  CRM_Core_Error::debug_log_message();
    $params['credit_card_type'] = strtoupper( $params['credit_card_type'] );
     // Card Types accepted by SagePay (Ver 2.23): VISA, MC, DELTA, MAESTRO, UKE, AMEX, DC, JCB, LASER, PAYPAL
@@ -108,8 +107,14 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     } else {
       $useremail = $params['email'];
     }
-  
+    //Invoice id is used by sagepay as the transaction id. CiviCRM API
+    //doesn not generate one (this is fixed in v 4.6) so we generate 
+    //one here if it has not been provided.
+    if ( empty($params['invoiceID']) ) {
+      $params['invoiceID'] = ! empty($params['invoice_id']) ? $params['invoice_id'] :  md5(uniqid(rand(), TRUE));
+    }  
     $donateAmount = str_replace(',', '', $params['amount']);
+    
     //Convert country id values to iso values if they have not been provided
     $country_keys = array('billing_country-5' => 'billing_country_id-5', 'country' => 'country_id');
     foreach ( $country_keys as  $isokey => $idkey ) {
@@ -156,7 +161,6 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     );
 
     $strlenBill = strlen($params['billing_state_province-5']);
-
   if($strlenBill <= 2) {
        $sageParams['BillingState'] = $params['billing_state_province-5'];
     $sageParams['DeliveryState'] = $params['billing_state_province-5'];
@@ -166,10 +170,12 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     foreach ($sageParams as $key => $value)
     $post .= ($key != 'Vendor' ? '&' : '') . $key . '=' . urlencode($value);
   
+watchdog('llr_debug', 'params for payment : <pre>%p</pre><h4>orig</h4> <pre>%po</pre>', array('%p' =>  print_r($sageParams, true), '%po' => print_r($params, true)));
     // Send payment POST to the target URL
     $url      = $this->_paymentProcessor['url_site'];
     $response = requestPost($url, $post);
 
+watchdog('llr_debug', 'response payment : %p', array('%p' =>  print_r($response, true)));
     // Workarounds for special cases
     if ($response["Status"] != 'OK') {
       if ( preg_match('/VendorTxCode has been used/i', $response["StatusDetail"]) ) {
@@ -225,8 +231,9 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     $msg = "Unfortunately, it seems the details provided are invalid – please double check your billing address and card details and try again.";  
     drupal_set_message($msg,'error');
     self::createFailedContribution($response, $params);
-    return new CRM_Core_Error();
+    return CRM_Core_Error::createAPIError( $msg, $response );
   }
+
   /**
    * SagePay payment has returned a status we do not understand
    * @param $response
@@ -238,7 +245,7 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     drupal_set_message($msg, 'error');
     watchdog('SagePay', $response["StatusDetail"], $response, WATCHDOG_ERROR);
     self::createFailedContribution($response, $params);
-    return new CRM_Core_Error();
+    return CRM_Core_Error::createAPIError($msg, $response);
   }
   /**
    * SagePay payment has failed
@@ -250,7 +257,7 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
     $msg = "Unfortunately, it seems the authorisation was a rejected – please double check your billing address and card details and try again.";
     drupal_set_message($msg, 'error');
     self::createFailedContribution($response, $params);
-    return new CRM_Core_Error();
+    return CRM_Core_Error::createAPIError($msg, $response);
   }
   /**
    * Create a contribution record for CC transactions that fail.
