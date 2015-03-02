@@ -37,11 +37,13 @@ class richieredizm_payment_sagepay extends CRM_Core_Payment {
    *
    * @param string $mode the mode of operation: live or test
    * @param $paymentProcessor
+   * @param $paymentForm
+   * @param $force
    * @return object
    * @static
    *
    */
-  static function &singleton( $mode, &$paymentProcessor ) {
+  static function &singleton( $mode, &$paymentProcessor, &$paymentForm=NULL, $force=false ) {
       $processorName = $paymentProcessor['name'];
       if (self::$_singleton[$processorName] === null ) {
           self::$_singleton[$processorName] = new richieredizm_payment_sagepay( $mode, $paymentProcessor );
