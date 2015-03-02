@@ -231,7 +231,7 @@ function requestPost($url, $data){
   //The next two lines must be present for the kit to work with newer version of cURL
   //You should remove them if you have any problems in earlier versions of cURL
     curl_setopt($curlSession, CURLOPT_SSL_VERIFYPEER, FALSE);
-    curl_setopt($curlSession, CURLOPT_SSL_VERIFYHOST, 1);
+    curl_setopt($curlSession, CURLOPT_SSL_VERIFYHOST, 2);
 
   //Send the request and store the result in an array
   
