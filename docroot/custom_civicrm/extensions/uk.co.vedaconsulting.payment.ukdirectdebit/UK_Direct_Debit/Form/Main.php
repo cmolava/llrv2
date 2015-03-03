@@ -129,14 +129,15 @@ class UK_Direct_Debit_Form_Main extends CRM_Core_Form
 
     $domain = CRM_Core_BAO_Domain::getDomain();
     $domainLoc = $domain->getLocationValues();
+
     $companyAddress['company_name'] = $domain->name;
     if (!empty($domainLoc['address'])) {
       $companyAddress['address1']     = $domainLoc['address'][1]['street_address'];
       $companyAddress['address2']     = $domainLoc['address'][1]['supplemental_address_1'];
-//      $companyAddress['address3']     = $domainLoc['address'][1]['supplemental_address_2'];
+      $companyAddress['address3']     = $domainLoc['address'][1]['supplemental_address_2'];
       $companyAddress['town']         = $domainLoc['address'][1]['city'];
       $companyAddress['postcode']     = $domainLoc['address'][1]['postal_code'];
-      $companyAddress['county']       = CRM_Core_PseudoConstant::county($domainLoc['address'][1]['state_province_id']);
+      $companyAddress['county']       = CRM_Core_PseudoConstant::county($domainLoc['address'][1]['county_id']);
       $companyAddress['country_id']   = CRM_Core_PseudoConstant::country($domainLoc['address'][1]['country_id']);
     }
 
@@ -211,7 +212,7 @@ class UK_Direct_Debit_Form_Main extends CRM_Core_Form
    */
   function setDirectDebitFields( &$form ) {
 
-//    CRM_Core_Payment_Form::_setPaymentFields($form);
+ //   CRM_Core_Payment_Form::_setPaymentFields($form);
 
     $form->_paymentFields['account_holder'] = array(
                                                      'htmlType'    => 'text',
@@ -790,8 +791,8 @@ EOF;
                                 'toEmail'   => $email
                               );
 
-      require_once 'CRM/Core/BAO/MessageTemplates.php';
-      list( $sent, $subject, $message, $html ) = CRM_Core_BAO_MessageTemplates::sendTemplate( $templatesParams );
+      require_once 'CRM/Core/BAO/MessageTemplate.php';
+      list( $sent, $subject, $message, $html ) = CRM_Core_BAO_MessageTemplate::sendTemplate( $templatesParams );
 
       if ( $sent ) {
         CRM_Core_Error::debug_log_message('Success: mail sent for recurring notification.');

@@ -141,7 +141,7 @@ ORDER BY cm.is_archived DESC, cm.name ASC";
         $defaults['is_respect_optout'] = $dao->is_respect_optout;
         $form->setDefaults( $defaults );
         $url = CRM_Utils_System::url('civicrm/mailing/report', 'mid='.$mid.'&reset=1');
-        echo "<a id='view_mailing_report' href=".$url.">&nbsp;View Mailing Report</a>";
+        //echo "<a id='view_mailing_report' href=".$url.">&nbsp;View Mailing Report</a>";
       }
     } else {
       // defaults for new reminder

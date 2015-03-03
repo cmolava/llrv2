@@ -642,6 +642,7 @@ class CRM_Core_Permission {
       'administer Tagsets' => $prefix . ts('administer Tagsets'),
       'administer reserved tags' => $prefix . ts('administer reserved tags'),
       'administer dedupe rules' => $prefix . ts('administer dedupe rules'),
+      'administer Scheduled Reminders' => $prefix . ts('administer scheduled reminders'),
       'merge duplicate contacts' => $prefix . ts('merge duplicate contacts'),
       'view debug output' => $prefix . ts('view debug output'),
       'view all notes' => $prefix . ts('view all notes'),
