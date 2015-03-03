@@ -26,6 +26,8 @@ if ( typeof cj === 'function' ) {
               billingVals = settings['billing_name_address_fields'] || [],
               input = null,
               showAddress = false;
+              console.log(settings);
+              
            for ( key in billingVals ) {
              input = $('#' + key, addr);
              if ( ! billingVals.hasOwnProperty(key) ) {
@@ -39,7 +41,7 @@ if ( typeof cj === 'function' ) {
            }
            //We hide billing address after we are sure it is populated
            var addrSection = addr.children('div.billing_name_address-section');
-           addrSection.toggle(showAddress);
+           addrSection.toggle(showAddress && billingVals);
            //Allow billing address to be changed
            addr.children('legend').text('Change Billing Name and Address').click(function() {
               showAddress = ! showAddress;
@@ -188,12 +190,25 @@ if ( typeof cj === 'function' ) {
    *  $radios.
    */
   function bindAmount($textField, $radios) {
-    $radios.change(function() {  
-        if ( $(this).attr('checked') ) {
+    $radios.change(function(e) {  
+        if ( $(this).prop('checked') ) {
             //When selected populate the main amount field
+           
+        console.log('item is checked triggering change in txt');
             $textField.val($(this).val()).trigger('change');
          }
     });
+    //Clear selection when textField changes
+   //Amount is manually adjusted, alter radios  
+    $textField.blur(function() {
+      $radios.each(function() {
+        var check = $textField.val() == formatAmount($(this).val());
+        if ( check != $(this).prop('checked') ) {
+          $(this).prop('checked', check).trigger('change');
+        }
+        
+      }); //each
+    });//blur
   }//bindAmount
   
   /**
@@ -330,19 +345,25 @@ if ( typeof cj === 'function' ) {
             block = $(this).parent('div.form-item'),
             label = $('label', block),
             blockContainer = block.parent('div');
-        $(this).hide();
+        $(this).change(function(e) {
+          if ( this.checked != true ) {
+             block.removeClass(selectedClass);
+           }
+           else {
+             blockContainer.find('.' + defaultClass).removeClass(selectedClass);
+             block.addClass(selectedClass);
+           }
+        }).hide();
+
         blockContainer.addClass('select-block-container');
         this.boundBlock = block;
         block.addClass(defaultClass)
           .click(function() {
              if ( ! $(that).attr('checked') ) { 
-                blockContainer.find('.' + defaultClass).removeClass(selectedClass);
-                $(this).addClass(selectedClass);
                 $(that).attr('checked', true).trigger('change');    
              }
           });
        sets.push(block);
-             
     });
     return sets;
   }//blockifyRadios
@@ -381,7 +402,8 @@ if ( typeof cj === 'function' ) {
           callback(subject, target);
         }
     });
-    
+   
+
     function switchClasses() { 
       if ( target.hasOwnProperty('currentSwitchClass') ) {
          $(target).removeClass(target.currentSwitchClass);
