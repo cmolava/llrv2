@@ -34,26 +34,10 @@ function llr_donation_helper_menu() {
  
 function llr_donation_helper_preprocess_page(&$variables) {
   if ( llr_donation_is_a_donation_page() ) {
-////    $variables['theme_hook_suggestion'] = 'page__bare';
     $variables['is_donation_page'] = TRUE;
   }
 
 }
-
-/**
- * Implements hook_theme_registry_alter()
- */
-function llr_donation_helper_theme_registry_alter(&$registry) {
-  //
-  if ( empty($registry['page__bare']) ) {
-    $registry['page__bare'] = $registry['page'];
-  }
-  $registry['page__bare']['template'] = 'page--bare';
-  $registry['page__bare']['render element'] = 'page';
-  $registry['page__bare']['theme paths'][] = drupal_get_path('module', 'llr_donation_helper') . '/templates';
-  $registry['page__bare']['path'] = drupal_get_path('module', 'llr_donation_helper') . '/templates';
-}
-
 /**
  * Implements hook_init()
  */
