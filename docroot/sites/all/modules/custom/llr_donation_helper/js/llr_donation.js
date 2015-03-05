@@ -26,7 +26,6 @@ if ( typeof cj === 'function' ) {
               billingVals = settings['billing_name_address_fields'] || [],
               input = null,
               showAddress = false;
-              console.log(settings);
               
            for ( key in billingVals ) {
              input = $('#' + key, addr);
@@ -57,7 +56,6 @@ if ( typeof cj === 'function' ) {
 //end civi jquery
 
 (function($, Drupal) {
-  
   //Postcode lookup and address
   $(document).ready(function (){
     //settings provided by llr_postcode_lookup module
@@ -137,7 +135,7 @@ if ( typeof cj === 'function' ) {
     var donationWebForm = $('form.webform-donate-single,form.webform-donate-monthly'),
        amountInput = null,
        amount = 0,
-       settings = Drupal.settings.LLRDonate | {},
+       settings = Drupal.settings.LLRDonate || {},
        nudge = settings['nudge'] || null,
        nudgeForm = '',
        nudgeBox= null;
@@ -193,8 +191,6 @@ if ( typeof cj === 'function' ) {
     $radios.change(function(e) {  
         if ( $(this).prop('checked') ) {
             //When selected populate the main amount field
-           
-        console.log('item is checked triggering change in txt');
             $textField.val($(this).val()).trigger('change');
          }
     });
