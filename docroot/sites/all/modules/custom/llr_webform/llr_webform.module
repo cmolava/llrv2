@@ -215,6 +215,7 @@ function llr_webform_node_load($nodes, $types ) {
  **/ 
 function llr_webform_unpack_submission_values($form_state) {
 
+  module_load_include('inc', 'webform', 'webform.submissions');
   $node = $form_state['build_info']['args'][0];
   $values = $form_state['values']['submitted'];
   $components = $node->webform['components'];

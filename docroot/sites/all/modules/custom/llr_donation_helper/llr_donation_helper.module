@@ -95,8 +95,6 @@ function llr_donation_helper_preprocess_webform_progressbar(&$variables) {
   $variables['percent'] = (($variables['page_num'] -1) / ($variables['page_count'] -1)) * 100;
 }
 
-
-
 function llr_donation_helper_civicrm_validateForm( $formName, &$fields, &$files, &$form, &$errors ) {
   if ( 'CRM_Contribute_Form_Contribution_Main' == $formName ) {
     //Supress state-province errors set by CRM_Form_Core::validateChainSelect
@@ -241,18 +239,16 @@ function llr_donation_webform_donate_validate($form, &$form_state) {
  */
 function llr_donation_webform_donate_submit($form, &$form_state) {
   $prev_vals = llr_webform_retrieve_values('llr_donate');
-  module_load_include('inc', 'webform', 'webform.submissions');
   $submission_data = llr_webform_unpack_submission_values($form_state);
   $prev_vals['webform'] = $submission_data;
   llr_webform_store_values('llr_donate', $prev_vals);
   watchdog('llr_donate', 'submission data is: <pre>%val</pre>', array('%val' => print_r($submission_data, true)));
   if ( empty($form_state['webform_completed']) ) {
-    //Add address country value from country id,
     return;
   }
   //llr_webform_clear_values('webform_donate_monthly');
   //Send details to the complete form
-  $form_state['redirect'] = '/donate/complete';
+  $form_state['redirect'] = 'donate/complete';
 }
 
 /**
