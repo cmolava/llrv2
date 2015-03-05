@@ -31,13 +31,16 @@ function llr_donation_helper_menu() {
 }
 
 
- 
+/**
+ * Implements hook_preprocess_page()
+ */ 
 function llr_donation_helper_preprocess_page(&$variables) {
+  //Let theme know of donation pages
   if ( llr_donation_is_a_donation_page() ) {
     $variables['is_donation_page'] = TRUE;
   }
-
 }
+
 /**
  * Implements hook_init()
  */
@@ -53,8 +56,8 @@ function llr_donation_helper_init() {
  * Access callback for donation complete page
  */
 function llr_donation_donate_complete_access() {
-  $prev_vals = llr_webform_retrieve_values('llr_donate');
-  return true; //! empty($prev_vals['complete']);
+  $prev_vals = llr_webform_retrieve_values('llr_donate_complete');
+  return ! empty($prev_vals);
 }
 
 /**
@@ -222,15 +225,20 @@ function llr_donation_webform_donate_validate($form, &$form_state) {
  * Submit handler for a named donate webform_client_form
  */
 function llr_donation_webform_donate_submit($form, &$form_state) {
+  //Update the cached values. This enables us to move between forms
   $prev_vals = llr_webform_retrieve_values('llr_donate');
   $submission_data = llr_webform_unpack_submission_values($form_state);
   $prev_vals['webform'] = $submission_data;
-  llr_webform_store_values('llr_donate', $prev_vals);
-  watchdog('llr_donate', 'submission data is: <pre>%val</pre>', array('%val' => print_r($submission_data, true)));
+
   if ( empty($form_state['webform_completed']) ) {
+   llr_webform_store_values('llr_donate', $prev_vals);
     return;
   }
-  //llr_webform_clear_values('webform_donate_monthly');
+  //Goto completion page
+  llr_webform_clear_values('llr_donate');
+  //We use a separate cache name for completion. 
+  //This will grant temporary access to the completion page
+  llr_webform_store_values('llr_donate_complete', $prev_vals);
   //Send details to the complete form
   $form_state['redirect'] = 'donate/complete';
 }

@@ -9,7 +9,7 @@
  */
 function llr_donation_donate_complete_page() {
   //Get donation values
-  $values = llr_webform_retrieve_values('llr_donate');
+  $values = llr_webform_retrieve_values('llr_donate_complete');
   //Clean up cache
   // llr_webform_clear_values('llr_donate');
   $contact_prefix = 'civicrm_1_contact_1_';
@@ -22,10 +22,7 @@ function llr_donation_donate_complete_page() {
     'mail' => $mail,
   );
   $prepop = llr_register_sanitize_values($prepop);
- kpr($prepop); 
-  kpr($values);
-//////// ///llrdebug remove true from here.
-  if (true || user_is_anonymous() && ! llr_donation_mail_exists() ) {
+  if ( user_is_anonymous() && ! llr_register_get_uid_by_mail($mail) ) {
     $content['register'] = llr_donation_keep_track($prepop);
   }
   $content['share'] = llr_donation_share(); 

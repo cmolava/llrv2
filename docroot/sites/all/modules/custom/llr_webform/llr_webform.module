@@ -227,3 +227,16 @@ function llr_webform_unpack_submission_values($form_state) {
    }
    return $return;
 }
+
+/**
+ * Implements hook_cron()
+ **/
+function llr_webform_cron() {
+  //Remove cached items over an hour old
+  $time = time() - 3600;
+  db_delete('ctools_object_cache')
+    ->condition('obj', LLR_CACHE_PREFIX)
+    ->condition('updated', $time, '<')
+    ->execute();
+}
+

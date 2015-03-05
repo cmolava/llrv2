@@ -35,10 +35,9 @@ function llr_register_registration_form($form, &$form_state) {
     '#tree' => FALSE,
     '#prefix' => '<div id="registration-form-wrapper">',
     '#suffix' => '</div>',
-    //'#validate' => 'llr_register_registration_form_validate',
     '#user_category' => 'register',
     '#user' => drupal_anonymous_user(), 
-    '#validate' => array('user_account_form_validate', 'llr_register_registration_form'),
+    '#validate' => array('user_account_form_validate', 'llr_register_registration_form_validate'),
   );
   $account['name'] = array(
     '#title' => t('Username'),
@@ -53,7 +52,7 @@ function llr_register_registration_form($form, &$form_state) {
     '#required' => TRUE,
     '#maxlength' => EMAIL_MAX_LENGTH,
   );
-  $account['password'] = array(
+  $account['pass'] = array(
     '#title' => t('Password'),
     '#placeholder' => t('Password'),
     '#description' => t('Enter a password'),
@@ -79,30 +78,45 @@ function llr_register_registration_form($form, &$form_state) {
   $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Submit'),
-    '#ajax' => array(
-      'callback' => 'llr_register_registration_form_ajax',
-      'wrapper' => 'registration-form-wrapper',
-      'method' => 'replace',
-      'effect' => 'fade',
-    ),
-  );
+   );
   return $form;
+}
+
+function llr_register_registration_form_submit($form, &$form_state) {
+  $values = $form_state['values'];
+  $values['init'] = $values['mail'];
+  $account = $form['#user'];
+  $account->is_new = TRUE;
+  if ( llr_register_get_uid_by_name($values['name']) ) {
+    //According to our guidelines, we append the uid to username
+    $account->uid = db_next_id(db_query('SELECT MAX(uid) FROM {users}')->fetchField());
+    $values['name'] .= $account->uid;
+  }
+  $account = user_save($account, $values);
+  $mailsent = _user_mail_notify('register_no_approval_required', $account);
+  drupal_set_message('Registration successful.');
 }
 
 /**
  * Form validation for registration form
+ * user_account_form() should be called back to perform standard validation.
+ * We add any extra validation requirements here.
  */
-function llr_register_registration_form_validate($form, &$form_state) {
-//user_account_form() performs standard validation, add any extra here.
+function llr_register_registration_form_validate(&$form, &$form_state) {
+  $min_pass_len = 6;
+  if ( empty($form_state['values']['pass']) || $min_pass_len > strlen($form_state['values']['pass']) ) {
+    form_set_error('pass', t('Password should be at least %min characters long', array('%min' => $min_pass_len)));
+  }
 }
 
 /**
  * Ajax callback for registration form
- */
+ *
 function  llr_register_registration_form_ajax($form, &$form_state) {
   //The whole form is replaced.
   return $form;
 }
+**/
 
 /**
  * Check values which are to be included as prepopulated hidden values
@@ -115,7 +129,6 @@ function llr_register_sanitize_values($values) {
     if ( user_validate_mail($values['mail']) || llr_register_get_uid_by_mail($values['mail']) ) {
       unset($values['mail']);
     }
-
   }
   if ( ! empty($values['name']) ) {
     $illegal = '/[^\x{80}-\x{F7} a-z0-9@_.\'-]/i';
@@ -128,13 +141,29 @@ function llr_register_sanitize_values($values) {
 }
 
 /**
+ * Returns the uid of a name if it exists for a user
+ */
+function llr_register_get_uid_by_name($name) {
+  return llr_register_get_uid('name', $name);
+}
+
+/**
  * Returns the uid of a mail address if it exists for a user
  */
 function llr_register_get_uid_by_mail($mail) {
+  return llr_register_get_uid('mail', $mail);
+}
+
+/**
+ * Returns the uid of a user by unique property
+ */
+function llr_register_get_uid($prop, $val) {
+  if (! $val || ! in_array($prop, array('mail', 'name')) ) {
+    return 0;
+  }
   return  db_select('users')
     ->fields('users', array('uid'))
-    ->condition('mail', db_like($mail), 'LIKE')
+    ->condition($prop, db_like($val), 'LIKE')
     ->range(0,1)->execute()
     ->fetchField();
 }
-
