@@ -209,4 +209,20 @@ function llr_webform_node_load($nodes, $types ) {
   } 
 }
 
+/**
+ * Extracts submission values from webform form_values, keyed by form key.
+ *  Form keys should be unique in the webform.
+ **/ 
+function llr_webform_unpack_submission_values($form_state) {
 
+  $node = $form_state['build_info']['args'][0];
+  $values = $form_state['values']['submitted'];
+  $components = $node->webform['components'];
+  $submission = webform_submission_data($node, $values);
+  foreach ( $submission as $key => $val ) {
+    if ( ! empty($components[$key]['form_key']) ) {
+      $return[$components[$key]['form_key']] = $val;;
+    }
+   }
+   return $return;
+}

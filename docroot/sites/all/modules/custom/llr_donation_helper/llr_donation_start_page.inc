@@ -136,7 +136,7 @@ function llr_donation_donate_start_form_submit(&$form, &$form_state) {
   if ( $dest_form ) {
     $nid = llr_webform_get_id_by_name($dest_form);
     $destination =  $nid ? 'node/' . $nid : $_GET['q'];
-    llr_webform_store_values($dest_form, $values);
+    llr_webform_store_values('llr_donate', $values);
     drupal_goto($destination);
   }
 }

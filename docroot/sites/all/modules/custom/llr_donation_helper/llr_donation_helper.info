@@ -4,4 +4,5 @@ core = 7.x
 dependencies[] = civicrm
 dependencies[] = webform
 dependencies[] = llr_webform
+dependencies[] = llr_register
 

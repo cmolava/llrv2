@@ -22,7 +22,7 @@ function llr_donation_helper_menu() {
  );
  $items['donate/complete'] = array(
    'title' => 'Thank you for your donation!',
-   'page callback' => 'llr_donation_complete_page',
+   'page callback' => 'llr_donation_donate_complete_page',
    'access callback' => 'llr_donation_donate_complete_access',
    'file' => 'llr_donation_complete_page.inc',
    'type' => MENU_CALLBACK,
@@ -69,7 +69,8 @@ function llr_donation_helper_init() {
  * Access callback for donation complete page
  */
 function llr_donation_donate_complete_access() {
-  return TRUE;
+  $prev_vals = llr_webform_retrieve_values('llr_donate');
+  return true; //! empty($prev_vals['complete']);
 }
 
 /**
@@ -94,12 +95,38 @@ function llr_donation_helper_preprocess_webform_progressbar(&$variables) {
   $variables['percent'] = (($variables['page_num'] -1) / ($variables['page_count'] -1)) * 100;
 }
 
+
+
+function llr_donation_helper_civicrm_validateForm( $formName, &$fields, &$files, &$form, &$errors ) {
+  if ( 'CRM_Contribute_Form_Contribution_Main' == $formName ) {
+    //Supress state-province errors set by CRM_Form_Core::validateChainSelect
+    //$form->setElementError('billing_state_province_id-5', NULL);
+  }
+}
+
 /**
  * Implements hook_civicrm_BuildForm()
- *
-function llr_donation_helper_civicrm_BuildForm(&$formName, &$form) {
+ */
+function llr_donation_helper_civicrm_BuildForm($formName, &$form) {
+//    watchdog('llr_debug', 'Altering form %name : <pre> %f </pre>', array('%name' => $formName, '%f' => print_r($form->_paymentFields, true)));
+  /**
+  watchdog('llr_debug', 'Altering form %name : <pre> %f </pre> prevals <pre>%v</pre>', array('%v' => print_r($prev_vals, true),'%name' => $formName, '%f' => print_r($form, true)));
+  if ( 'CRM_Contribute_Form_Contribution_Main' == $formName ) {
+    $prev_vals = llr_webform_retrieve_values('llr_donate');
+
+    $elem_name = 'billing_state_province_id-5';
+    if ( $form->elementExists($elem_name) ) {
+  //    kpr($form);
+//      $elem = $form->getElement('billing_state_province_id-5');
+     $form->_paymentFields[$elem_name]['is_required'] = FALSE;
+     $form->removeElement($elem_name);
+     $form->addChainSelect($elem_name, array('required' => false));
+    watchdog('llr_debug', 'DefaultValues <pre>%e</pre>', array('%e' =>  print_r($elem, true)));
+    }
+     
+  }
+  **/
 }
-//**/
 
 /**
  * Implements hook_form_alter()
@@ -126,12 +153,11 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
       return;
   }
   //Do we have donation amount  from the start form?
-  $prev_values = llr_webform_retrieve_values($name);
+  $prev_values = llr_webform_retrieve_values('llr_donate');
   if ( empty( $prev_values['donate_amount']) ) {
       drupal_goto('donate/start');
       return;
   }
-  
   //Add submission handler
    $form['#submit'][] = 'llr_donation_webform_donate_submit';
   
@@ -144,7 +170,6 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
       $form['actions']['previous']['#access'] = FALSE;
    }
 
- //   kpr($form);
   //Add postcode lookup to contact address
   if ( ! empty($form['submitted']['civicrm_1_contact_1_fieldset_fieldset']) ) {
     llr_donate_insert_postcode_lookup($form);
@@ -177,7 +202,6 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
       '#access' => FALSE,
     );
   }
-  
   //Displaying a civi contribution payment page 
   if ( ! empty( $form['submitted'][WF_CONTRIB_ELEM]) ) {
     //Prepopulate billing address fields 
@@ -191,7 +215,14 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
     //Alter submit button label
     $form['actions']['submit']['#value'] = t('Donate !amount',
       array('!amount' => '£' . $amount));
-  } 
+     
+    $form['#validate'][] = 'llr_donation_webform_donate_validate';
+    //Contribution and other transactions expect invoice_id in params but neither 
+    //civicrm_api  nor webform_civicrm generate one <= CiviCRM v4.6
+    //It is used as the trx code to the payment gateway, so we add it here.
+    //todo: move this to general civi/webform processing.
+
+  }//end contrib payment page only 
 
   $form['#attributes']['class'][] = str_replace('_', '-', $name);
   $form['#attributes']['class'][] = 'webform-donate';
@@ -199,24 +230,69 @@ function llr_donation_helper_form_alter(&$form, &$form_state, $form_id) {
   $form['#attached']['css'][] = $path . '/css/llr_donation.css';
 }
 
+//We may here grab the address items to repopulate the billing address
+function llr_donation_webform_donate_validate($form, &$form_state) {
+ 
+  watchdog('llr_donate', 'validate: form state is: <pre>%val</pre>', array('%val' => print_r($form_state, true)));
+}
+
 /**
  * Submit handler for a named donate webform_client_form
  */
 function llr_donation_webform_donate_submit($form, &$form_state) {
+  $prev_vals = llr_webform_retrieve_values('llr_donate');
+  module_load_include('inc', 'webform', 'webform.submissions');
+  $submission_data = llr_webform_unpack_submission_values($form_state);
+  $prev_vals['webform'] = $submission_data;
+  llr_webform_store_values('llr_donate', $prev_vals);
+  watchdog('llr_donate', 'submission data is: <pre>%val</pre>', array('%val' => print_r($submission_data, true)));
   if ( empty($form_state['webform_completed']) ) {
+    //Add address country value from country id,
     return;
   }
+  //llr_webform_clear_values('webform_donate_monthly');
   //Send details to the complete form
-  llr_webform_store_values('donate_complete', $form_state['values']);
-  $form_state['destination'] = '/donate/complete';
+  $form_state['redirect'] = '/donate/complete';
+}
+
+/**
+ * Adds some values for payment
+ */
+/**
+function _llr_donation_helper_preprocess_payment(&$form, &$form_state) {
+  $values &= $form_state['values']['submitted'];
+  if ( ! empty($values['billing_country_id-5']) && empty($values['billing_country-5']) ) {
+    $country = _llr_donation_helper_civicrm_country($values['billing_country_id-5']);
+    $country_iso = $country['iso_code'];
+    $values['billing_country-5'] = $country_iso;
+  }
+}
+**/
+
+/**
+ * Gets a civicrm country by id
+ */
+function _llr_donation_helper_civicrm_country($id) {
+  static $countries;
+  if ( ! isset($countries[$id]) ) {
+    $result = civicrm_api3('Country', 'get', array(
+      'sequential' => FALSE,
+      'id' => $id,
+    ));
+    if ( empty($result['is_error']) ) {
+      $countries[$id] = $result['values'][$id];
+    }
+  }
+  return empty($countries[$id]) ? array() : $countries[$id];
 }
 
 /**
  * Submission handler for the back_to_start button
  */
 function llr_donation_helper_back_to_start($form, &$form_state) {
-  $start_vals = llr_webform_retrieve_values($form['#node']->llr_webform['name']);
-  llr_webform_store_values('donate_start_form', $start_vals);
+  $start_vals = llr_webform_retrieve_values('llr_donate');
+  $start_vals['webform'] = $form_state;
+  llr_webform_store_values('llr_donate', $start_vals);
   drupal_goto('donate/start');
 }
 
@@ -258,9 +334,11 @@ function llr_donation_billing_address_field_values( &$form_state) {
 
   //The contact form uses abbreviations but the billing form uses civi internal id.
   //Better to use civicrm_api but does not seem to provide state_province.
-  $state_provinces = CRM_Core_PseudoConstant::stateProvinceAbbreviation();
-  $key = array_search($billing_data['billing_state_province_id-5'], $state_provinces);
-  $billing_data['billing_state_province_id-5'] = $key;
+  if ( ! empty($billing_data['billing_state_province_id-5']) ) {
+    $state_provinces = CRM_Core_PseudoConstant::stateProvinceAbbreviation();
+    $key = array_search($billing_data['billing_state_province_id-5'], $state_provinces);
+    $billing_data['billing_state_province_id-5'] = $key;
+  }
   
   return $billing_data;
 }
@@ -302,7 +380,7 @@ function llr_donation_get_donation_value($form_state, $start_values=array(), $na
         //If a new value has been submitted it overrides the one from the start;
         if ( $start_values && $name ) {
           $start_values['donate_amount'] = $val;
-          llr_webform_store_values($name, $start_values);
+          llr_webform_store_values('llr_donate', $start_values);
         }
         return $val;
       }
@@ -350,14 +428,15 @@ function llr_donation_helper_webform_component_render_alter(&$element, &$compone
       return;
     }
     $data[$nid]['name'] = $name;
-    $data[$nid]['data'] = llr_webform_retrieve_values($name);
+    $data[$nid]['data'] = llr_webform_retrieve_values('llr_donate');
   }
   $values = $data[$nid]['data'];
   switch ( $component['form_key'] ) {
     case  'civicrm_1_contribution_1_contribution_total_amount' :
       $amount = $element['#default_value']; 
+      $orig_amount = ! empty($values['donate_amount']) ? $values['donate_amount'] : '';
       //if $amount exists it is more recently submitted than $values
-      $element['#default_value'] = $amount? $amount : $values['donate_amount'];
+      $element['#default_value'] = $amount? $amount : $orig_amount;
       $component['extra']['wrapper_classes'] .= 'populated';
       break;
     case  'civicrm_1_contribution_1_contribution_payment_processor_id' :
@@ -365,6 +444,12 @@ function llr_donation_helper_webform_component_render_alter(&$element, &$compone
   }
 }
 
+/**
+ * Inserts a postcode lookup widget into donate webform
+ * 
+ *  Works best with the address fields are arranged contiguously within
+ * a civicrm contact fieldset, with the country field first.
+ */
 function llr_donate_insert_postcode_lookup(&$form) {
   //These address field names are for civi contact in webform
   //(assuming the default label for the contact is used: contact 1);
