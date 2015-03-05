@@ -121,7 +121,7 @@ function llr_donation_donate_start_form_validate(&$form, &$form_state) {
  * Submit callback for donation start  form
  */
 function llr_donation_donate_start_form_submit(&$form, &$form_state) {
-  $values = $form_state['values'];
+  $values = form_state_values_clean($form_state['values']);
   $destination = '';
   //Route to a named donate webform
   switch  ( $values['donate_options']  ) {
