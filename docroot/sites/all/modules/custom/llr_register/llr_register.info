@@ -1,0 +1,4 @@
+name = LLR Register
+description = Registration customisations
+core = 7.x
+

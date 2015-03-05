@@ -1,0 +1,140 @@
+<?php
+
+/**
+ * Implements hook_block_info
+ */
+function llr_register_block_info() {
+  $blocks['llr_register_form'] = array(
+    'info' => t('Custom registration block'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view
+ */
+function llr_register_block_view($delta='') {
+  $block = array();
+  switch ( $delta ) {
+    case 'llr_register_form' :
+      $block['subject'] = t('Register');
+      $block['content'] = drupal_get_form('llr_register_registration_form');
+      break;
+  }
+  return $block;
+}
+
+
+/**
+ * Form builder for llr_register_form
+ */
+function llr_register_registration_form($form, &$form_state) {
+
+  $form = array(
+    '#tree' => FALSE,
+    '#prefix' => '<div id="registration-form-wrapper">',
+    '#suffix' => '</div>',
+    //'#validate' => 'llr_register_registration_form_validate',
+    '#user_category' => 'register',
+    '#user' => drupal_anonymous_user(), 
+    '#validate' => array('user_account_form_validate', 'llr_register_registration_form'),
+  );
+  $account['name'] = array(
+    '#title' => t('Username'),
+    '#description' => t('Choose your username'),
+    '#type' => 'textfield',
+    '#required' => TRUE,
+  );
+  $account['mail'] = array(
+    '#title' => t('email'),
+    '#description' => t('Enter a valid email address'),
+    '#type' => 'textfield',
+    '#required' => TRUE,
+    '#maxlength' => EMAIL_MAX_LENGTH,
+  );
+  $account['password'] = array(
+    '#title' => t('Password'),
+    '#placeholder' => t('Password'),
+    '#description' => t('Enter a password'),
+    '#type' => 'password',
+    '#required' => TRUE,
+  );
+  $account['#type'] = 'container';
+  
+  //Default values may be passed in the call to drupal_get_form and the 
+  //pre-populated fields will be hidden
+  //User submitted values take precedence. 
+  $default =   ! empty($form_state['build_info']['args'][0]) ? $form_state['build_info']['args'][0] : array();
+  $submitted = ! empty($form_state['values']) ? $form_state['values'] : array();
+  $vals = array_merge($default, $submitted);
+  foreach ( $vals as $key => $value ) {
+    if ( ! empty($account[$key]) && $value ) {
+      $account[$key]['#default_value'] = $value;
+      $account[$key]['#access'] = empty($default[$key]);
+    }
+  }
+  $form['account'] = $account;
+  
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit'),
+    '#ajax' => array(
+      'callback' => 'llr_register_registration_form_ajax',
+      'wrapper' => 'registration-form-wrapper',
+      'method' => 'replace',
+      'effect' => 'fade',
+    ),
+  );
+  return $form;
+}
+
+/**
+ * Form validation for registration form
+ */
+function llr_register_registration_form_validate($form, &$form_state) {
+//user_account_form() performs standard validation, add any extra here.
+}
+
+/**
+ * Ajax callback for registration form
+ */
+function  llr_register_registration_form_ajax($form, &$form_state) {
+  //The whole form is replaced.
+  return $form;
+}
+
+/**
+ * Check values which are to be included as prepopulated hidden values
+ * in registration form.
+ * Similar to validating but we don't throw form but instead remove from the
+ * returned array.
+ */
+function llr_register_sanitize_values($values) {
+  if ( ! empty($values['mail'])  ) {
+    if ( user_validate_mail($values['mail']) || llr_register_get_uid_by_mail($values['mail']) ) {
+      unset($values['mail']);
+    }
+
+  }
+  if ( ! empty($values['name']) ) {
+    $illegal = '/[^\x{80}-\x{F7} a-z0-9@_.\'-]/i';
+    $values['name'] = preg_replace( $illegal,'', trim($values['name']));
+    if ( user_validate_name($values['name']) ) {
+      unset($values['name']);
+    }
+  }
+  return $values;
+}
+
+/**
+ * Returns the uid of a mail address if it exists for a user
+ */
+function llr_register_get_uid_by_mail($mail) {
+  return  db_select('users')
+    ->fields('users', array('uid'))
+    ->condition('mail', db_like($mail), 'LIKE')
+    ->range(0,1)->execute()
+    ->fetchField();
+}
+
