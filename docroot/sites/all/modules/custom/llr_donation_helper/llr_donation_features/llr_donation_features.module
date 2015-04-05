@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the LLR Donation Features feature.
+ */
+
+include_once 'llr_donation_features.features.inc';
