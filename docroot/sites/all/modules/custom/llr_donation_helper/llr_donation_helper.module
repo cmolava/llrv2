@@ -13,10 +13,20 @@ define('WF_CONTRIB_ELEM', 'civicrm_1_contribution_1_contribution_contribution_pa
  */
 function llr_donation_helper_menu() {
  $items = array();
+ $items['admin/config/llr/donation'] = array(
+  'title' => 'Donation Settings',
+  'description' => 'Set target amounts, nudges and other items for Donation journeys.',
+  'page callback' => 'drupal_get_form',
+  'page arguments' => array('llr_donation_admin_form'),
+  //We will use nearest equivalent permission from CiviCRM contribute
+  'access arguments' => array('edit contributions'),
+  'type' => MENU_NORMAL_ITEM, // MENU_CALLBACK, MENU_LOCAL_TASK, MENU_DEFAULT_LOCAL_TASK, MENU_LOCAL_ACTION, MENU_SUGGESTED_ITEM,
+   'file' => 'llr_donation_helper.admin.inc',
+  );
  $items['donate/start'] = array(
    'title' => t('Donate'),
    'page callback' => 'llr_donation_donate_start_page',
-   'access callback' => TRUE,
+   'access arguments' => array('make online contributions'),
    'file' => 'llr_donation_start_page.inc',
    'type' => MENU_CALLBACK,
  );
@@ -86,6 +96,9 @@ function llr_donation_helper_civicrm_validateForm( $formName, &$fields, &$files,
   if ( 'CRM_Contribute_Form_Contribution_Main' == $formName ) {
     //Supress state-province errors set by CRM_Form_Core::validateChainSelect
     //$form->setElementError('billing_state_province_id-5', NULL);
+    $wf = wf_crm_webform_postprocess::singleton(); 
+    watchdog('llrdebug', 'validating %f with <pre>%fields</pre>', array($fields, true));
+    watchdog('llrdebug', 'got wf in validation hook  <pre>%form</pre>', array($wf, true));
   }
 }
 
@@ -96,8 +109,15 @@ function llr_donation_helper_civicrm_BuildForm($formName, &$form) {
 //    watchdog('llr_debug', 'Altering form %name : <pre> %f </pre>', array('%name' => $formName, '%f' => print_r($form->_paymentFields, true)));
   /**
   watchdog('llr_debug', 'Altering form %name : <pre> %f </pre> prevals <pre>%v</pre>', array('%v' => print_r($prev_vals, true),'%name' => $formName, '%f' => print_r($form, true)));
+  **/
+  if ( 'CRM_Core_Payment_Form' == $formName ) {
+     kpr('core payment form');
+  }
   if ( 'CRM_Contribute_Form_Contribution_Main' == $formName ) {
-    $prev_vals = llr_webform_retrieve_values('llr_donate');
+    kpr('contribution form');
+    return;
+    $prev_vals = llr_webfmrm_retrieve_values('llr_donate');
+  
 
     $elem_name = 'billing_state_province_id-5';
     if ( $form->elementExists($elem_name) ) {
@@ -110,7 +130,6 @@ function llr_donation_helper_civicrm_BuildForm($formName, &$form) {
     }
      
   }
-  **/
 }
 
 /**
